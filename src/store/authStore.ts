@@ -1,41 +1,58 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { supabase } from '@/lib/supabase'
 import type { User } from '@/types/user'
-import { mockUsers } from '@/data/users'
 
 interface AuthStore {
   user: User | null
   isAuthenticated: boolean
+  isLoading: boolean
   login: (email: string, password: string) => Promise<boolean>
-  logout: () => void
-  switchUser: (userId: string) => void
+  logout: () => Promise<void>
+  loadSession: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
+export const useAuthStore = create<AuthStore>((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
 
-      login: async (email: string, _password: string) => {
-        const found = mockUsers.find(
-          (u: User) =>
-            u.email.toLowerCase() === email.toLowerCase() && u.actif
-        )
-        if (found) {
-          set({ user: found, isAuthenticated: true })
-          return true
-        }
-        return false
-      },
+  loadSession: async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+      if (profile) {
+        set({ user: profile as User, isAuthenticated: true })
+      }
+    }
+    set({ isLoading: false })
+  },
 
-      logout: () => set({ user: null, isAuthenticated: false }),
+  login: async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('Supabase auth response:', { data, error })
 
-      switchUser: (userId: string) => {
-        const found = mockUsers.find((u: User) => u.id === userId)
-        if (found) set({ user: found, isAuthenticated: true })
-      },
-    }),
-    { name: 'crm-reno-auth' }
-  )
-)
+    if (error || !data.user) return false
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single()
+    console.log('Profile response:', { profile, profileError })
+
+    if (profile) {
+      set({ user: profile as User, isAuthenticated: true })
+      return true
+    }
+    return false
+  },
+
+  logout: async () => {
+    await supabase.auth.signOut()
+    set({ user: null, isAuthenticated: false })
+  },
+}))
