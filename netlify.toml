@@ -1,11 +1,9 @@
 [build]
-  command = "npm run build"
+  command = "npx vite build"
   publish = "dist"
 
-[[headers]]
-  for = "/assets/*"
-  [headers.values]
-    Content-Type = "application/javascript"
+[build.environment]
+  NODE_VERSION = "18"
 
 [[redirects]]
   from = "/*"
