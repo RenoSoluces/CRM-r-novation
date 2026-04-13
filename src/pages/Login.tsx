@@ -2,16 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { mockUsers } from '@/data/users'
 import logo from '@/assets/Logo Reno Soluces.jpg'
-
-const ROLE_LABELS: Record<string, string> = {
-  admin:      'Administrateur',
-  dirigeant:  'Dirigeant',
-  commercial: 'Commercial',
-  apporteur:  "Apporteur d'affaires",
-  regie:      'Régie',
-}
 
 export default function Login() {
   const { login } = useAuth()
@@ -30,7 +21,7 @@ export default function Login() {
     const ok = await login(email, password)
     setLoading(false)
     if (ok) navigate('/')
-    else setError('Email introuvable ou compte inactif.')
+    else setError('Email ou mot de passe incorrect.')
   }
 
   return (
@@ -114,32 +105,6 @@ export default function Login() {
               {loading ? 'Connexion…' : 'Se connecter'}
             </button>
           </form>
-
-          {/* Comptes démo */}
-          <div className="mt-6 pt-5 border-t border-surface-100">
-            <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-3">
-              Comptes de démonstration
-            </p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {mockUsers.map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => setEmail(u.email)}
-                  className="text-left p-2.5 rounded-lg hover:bg-surface-50 border border-surface-100 hover:border-brand-200 transition-all"
-                >
-                  <p className="text-[11px] font-semibold text-surface-700 truncate">
-                    {u.prenom} {u.nom}
-                  </p>
-                  <p className="text-[9px] text-surface-400 mt-0.5">
-                    {ROLE_LABELS[u.role]}
-                  </p>
-                </button>
-              ))}
-            </div>
-            <p className="text-[9px] text-surface-400 mt-2.5 text-center">
-              Cliquez sur un compte → mot de passe : <strong>demo</strong>
-            </p>
-          </div>
         </div>
       </div>
     </div>
