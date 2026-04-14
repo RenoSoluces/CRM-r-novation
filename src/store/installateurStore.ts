@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
-import type { Installateur, Chantier } from '@/types/installateur'
+import type { Installateur, Chantier, ZoneIntervention } from '@/types/installateur'
 
 function mapRow(row: any): Installateur {
   return {
@@ -40,7 +40,7 @@ interface InstallateurStore {
   updateChantier: (installateurId: string, chantierId: string, data: Partial<Chantier>) => void
   getById: (id: string) => Installateur | undefined
   getByProduit: (produitId: string) => Installateur[]
-  getByZone: (zone: string) => Installateur[]
+  getByZone: (zone: ZoneIntervention) => Installateur[]
 }
 
 export const useInstallateursStore = create<InstallateurStore>()((set, get) => ({
@@ -138,5 +138,5 @@ export const useInstallateursStore = create<InstallateurStore>()((set, get) => (
 
   getById: (id) => get().installateurs.find(i => i.id === id),
   getByProduit: (produitId) => get().installateurs.filter(i => i.produitIds.includes(produitId) && i.actif),
-  getByZone: (zone) => get().installateurs.filter(i => i.zonesIntervention.includes(zone) && i.actif),
+  getByZone: (zone: ZoneIntervention) => get().installateurs.filter(i => i.zonesIntervention.includes(zone) && i.actif),
 }))

@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Search, Star, MapPin, Phone, Mail, Wrench, Calendar, CheckCircle } from 'lucide-react'
+import { Search, Star, MapPin, Phone, Mail, Wrench, Calendar, CheckCircle, Plus, X } from 'lucide-react'
 import { useInstallateursStore } from '@/store/installateurStore'
 import { useProduitsStore } from '@/store/produitsStore'
+import { useAuth } from '@/hooks/useAuth'
 import { formatDate } from '@/utils/formatters'
 import Badge, { FAMILLE_LABELS, FAMILLE_COLORS } from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
+import type { ZoneIntervention } from '@/types/installateur'
 import clsx from 'clsx'
 
-const ZONE_LABELS: Record<string, string> = {
+const ZONE_LABELS: Record<ZoneIntervention, string> = {
   H1: 'Zone H1',
   H2: 'Zone H2',
   H3: 'Zone H3',
   france_entiere: 'France entière',
 }
+
+const ZONES: ZoneIntervention[] = ['H1', 'H2', 'H3', 'france_entiere']
 
 const STATUT_CHANTIER_COLORS: Record<string, string> = {
   planifie: '#3b82f6', en_cours: '#f59e0b', termine: '#10b981', annule: '#ef4444',
@@ -21,16 +25,33 @@ const STATUT_CHANTIER_LABELS: Record<string, string> = {
   planifie: 'Planifié', en_cours: 'En cours', termine: 'Terminé', annule: 'Annulé',
 }
 
-export default function Installateurs() {
-  const { installateurs, isLoading, fetchInstallateurs } = useInstallateursStore()
-  const { produits } = useProduitsStore()
-  const [search,   setSearch]   = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [onglet,   setOnglet]   = useState<'infos' | 'chantiers'>('infos')
+const EMPTY_FORM = {
+  raisonSociale: '',
+  siret: '',
+  contactNom: '',
+  contactPrenom: '',
+  contactEmail: '',
+  contactTelephone: '',
+  adresseRue: '',
+  adresseCodePostal: '',
+  adresseVille: '',
+  zonesIntervention: [] as ZoneIntervention[],
+  certifications: '',
+  notes: '',
+}
 
-  useEffect(() => {
-    fetchInstallateurs()
-  }, [])
+export default function Installateurs() {
+  const { installateurs, isLoading, fetchInstallateurs, addInstallateur } = useInstallateursStore()
+  const { produits } = useProduitsStore()
+  const { can } = useAuth()
+  const [search,    setSearch]    = useState('')
+  const [selected,  setSelected]  = useState<string | null>(null)
+  const [onglet,    setOnglet]    = useState<'infos' | 'chantiers'>('infos')
+  const [showModal, setShowModal] = useState(false)
+  const [form,      setForm]      = useState(EMPTY_FORM)
+  const [saving,    setSaving]    = useState(false)
+
+  useEffect(() => { fetchInstallateurs() }, [])
 
   const filtered = installateurs.filter(i =>
     i.actif && (!search ||
@@ -40,16 +61,61 @@ export default function Installateurs() {
 
   const inst = installateurs.find(i => i.id === selected)
 
+  function toggleZone(z: ZoneIntervention) {
+    setForm(f => ({
+      ...f,
+      zonesIntervention: f.zonesIntervention.includes(z)
+        ? f.zonesIntervention.filter(x => x !== z)
+        : [...f.zonesIntervention, z],
+    }))
+  }
+
+  async function handleSubmit() {
+    if (!form.raisonSociale || !form.contactNom || !form.contactTelephone) return
+    setSaving(true)
+    await addInstallateur({
+      raisonSociale: form.raisonSociale,
+      siret: form.siret || undefined,
+      contact: {
+        nom: form.contactNom,
+        prenom: form.contactPrenom,
+        email: form.contactEmail,
+        telephone: form.contactTelephone,
+      },
+      adresse: {
+        rue: form.adresseRue,
+        codePostal: form.adresseCodePostal,
+        ville: form.adresseVille,
+      },
+      zonesIntervention: form.zonesIntervention,
+      produitIds: [],
+      certifications: form.certifications ? form.certifications.split(',').map(c => c.trim()).filter(Boolean) : [],
+      note: 0,
+      nombreChantiers: 0,
+      actif: true,
+      notes: form.notes || undefined,
+    })
+    setSaving(false)
+    setShowModal(false)
+    setForm(EMPTY_FORM)
+  }
+
   return (
     <div className="flex gap-5 h-[calc(100vh-8rem)]">
       {/* Liste */}
       <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-surface-200 shadow-card flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-surface-100">
+        <div className="p-4 border-b border-surface-100 space-y-3">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-surface-200 bg-surface-50">
             <Search size={13} className="text-surface-400" />
             <input type="text" placeholder="Rechercher…" value={search} onChange={e => setSearch(e.target.value)}
               className="bg-transparent text-xs text-surface-700 placeholder-surface-400 outline-none w-full" />
           </div>
+          {can('utilisateurs.edit') && (
+            <button onClick={() => setShowModal(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold transition-colors">
+              <Plus size={13} /> Ajouter un partenaire
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-surface-50">
@@ -80,7 +146,7 @@ export default function Installateurs() {
               <div className="flex flex-wrap gap-1 mt-2">
                 {i.zonesIntervention.map(z => (
                   <span key={z} className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-100 text-brand-700 font-bold">
-                    {ZONE_LABELS[z] ?? z}
+                    {ZONE_LABELS[z]}
                   </span>
                 ))}
               </div>
@@ -104,7 +170,6 @@ export default function Installateurs() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-surface-200 shadow-card flex flex-col h-full overflow-hidden">
-            {/* Header */}
             <div className="p-5 border-b border-surface-100">
               <div className="flex items-start justify-between">
                 <div>
@@ -129,7 +194,6 @@ export default function Installateurs() {
               )}
             </div>
 
-            {/* Onglets */}
             <div className="flex border-b border-surface-100">
               {(['infos', 'chantiers'] as const).map(o => (
                 <button key={o} onClick={() => setOnglet(o)}
@@ -159,7 +223,7 @@ export default function Installateurs() {
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {inst.zonesIntervention.map(z => (
                           <span key={z} className="text-[10px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 font-bold">
-                            {ZONE_LABELS[z] ?? z}
+                            {ZONE_LABELS[z]}
                           </span>
                         ))}
                       </div>
@@ -222,6 +286,110 @@ export default function Installateurs() {
           </div>
         )}
       </div>
+
+      {/* Modal ajout partenaire */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-surface-100">
+              <h3 className="font-display font-bold text-surface-800">Nouveau partenaire</h3>
+              <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM) }}
+                className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-500 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Raison sociale */}
+              <Field label="Raison sociale *">
+                <input value={form.raisonSociale} onChange={e => setForm(f => ({ ...f, raisonSociale: e.target.value }))}
+                  placeholder="Ex : IDEHOME" className={inputClass} />
+              </Field>
+
+              <Field label="SIRET">
+                <input value={form.siret} onChange={e => setForm(f => ({ ...f, siret: e.target.value }))}
+                  placeholder="123 456 789 00012" className={inputClass} />
+              </Field>
+
+              {/* Contact */}
+              <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Contact</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Nom *">
+                  <input value={form.contactNom} onChange={e => setForm(f => ({ ...f, contactNom: e.target.value }))}
+                    placeholder="Dupont" className={inputClass} />
+                </Field>
+                <Field label="Prénom">
+                  <input value={form.contactPrenom} onChange={e => setForm(f => ({ ...f, contactPrenom: e.target.value }))}
+                    placeholder="Jean" className={inputClass} />
+                </Field>
+              </div>
+              <Field label="Téléphone *">
+                <input value={form.contactTelephone} onChange={e => setForm(f => ({ ...f, contactTelephone: e.target.value }))}
+                  placeholder="06.00.00.00.00" className={inputClass} />
+              </Field>
+              <Field label="Email">
+                <input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))}
+                  placeholder="contact@partenaire.fr" className={inputClass} />
+              </Field>
+
+              {/* Adresse */}
+              <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Adresse</p>
+              <Field label="Rue">
+                <input value={form.adresseRue} onChange={e => setForm(f => ({ ...f, adresseRue: e.target.value }))}
+                  placeholder="12 rue des Artisans" className={inputClass} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Code postal">
+                  <input value={form.adresseCodePostal} onChange={e => setForm(f => ({ ...f, adresseCodePostal: e.target.value }))}
+                    placeholder="75000" className={inputClass} />
+                </Field>
+                <Field label="Ville">
+                  <input value={form.adresseVille} onChange={e => setForm(f => ({ ...f, adresseVille: e.target.value }))}
+                    placeholder="Paris" className={inputClass} />
+                </Field>
+              </div>
+
+              {/* Zones */}
+              <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Zones d'intervention</p>
+              <div className="flex flex-wrap gap-2">
+                {ZONES.map(z => (
+                  <button key={z} type="button" onClick={() => toggleZone(z)}
+                    className={clsx('text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors',
+                      form.zonesIntervention.includes(z)
+                        ? 'bg-brand-600 border-brand-600 text-white'
+                        : 'border-surface-200 text-surface-600 hover:border-brand-300')}>
+                    {ZONE_LABELS[z]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Certifications */}
+              <Field label="Certifications (séparées par des virgules)">
+                <input value={form.certifications} onChange={e => setForm(f => ({ ...f, certifications: e.target.value }))}
+                  placeholder="RGE QualiPAC, RGE QualiPV" className={inputClass} />
+              </Field>
+
+              {/* Notes */}
+              <Field label="Notes internes">
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Informations complémentaires…" rows={3}
+                  className={clsx(inputClass, 'resize-none')} />
+              </Field>
+            </div>
+
+            <div className="flex gap-3 p-5 border-t border-surface-100">
+              <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM) }}
+                className="flex-1 py-2.5 rounded-lg border border-surface-200 text-xs font-semibold text-surface-600 hover:bg-surface-50 transition-colors">
+                Annuler
+              </button>
+              <button onClick={handleSubmit} disabled={saving || !form.raisonSociale || !form.contactNom || !form.contactTelephone}
+                className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors">
+                {saving ? 'Enregistrement…' : 'Ajouter le partenaire'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -234,3 +402,14 @@ function InfoBlock({ title, children }: { title: string; children: React.ReactNo
     </div>
   )
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-surface-600 mb-1.5">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+const inputClass = "w-full px-3.5 py-2.5 rounded-lg border border-surface-200 text-xs text-surface-800 placeholder-surface-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all"
