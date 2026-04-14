@@ -1,4 +1,5 @@
 export type StatutChantier = 'planifie' | 'en_cours' | 'termine' | 'annule'
+export type ZoneIntervention = 'H1' | 'H2' | 'H3' | 'france_entiere'
 
 export interface Chantier {
   id: string
@@ -26,7 +27,7 @@ export interface Installateur {
     codePostal: string
     ville: string
   }
-  zonesIntervention: string[]
+  zonesIntervention: ZoneIntervention[]
   produitIds: string[]
   certifications: string[]
   note: number

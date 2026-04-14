@@ -10,6 +10,12 @@ export type FamilleProduit =
   | 'photovoltaique'
   | 'renovation_ampleur'
   | 'cee_professionnel'
+  | 'visite_technique'  // ← ajout
+
+export interface PrixPartenaire {
+  installateurId: string
+  prix: number
+}
 
 export interface AideMPR {
   tranche: 'tres_modeste' | 'modeste' | 'intermediaire' | 'superieure'
@@ -44,6 +50,7 @@ export interface Produit {
   prixMoyenVente: number
   prixMin: number
   prixMax: number
+  prixParPartenaire?: PrixPartenaire[]  // ← ajout
   aidesMPR: AideMPR[]
   aidesCEE: AideCEE[]
   installateurIds: string[]

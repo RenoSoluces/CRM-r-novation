@@ -231,4 +231,30 @@ export const mockProduits: Produit[] = [
     createdAt: '2024-01-01',
     updatedAt: '2024-09-01',
   },
+
+  {
+    id: 'p9',
+    categorie: 'particulier',
+    famille: 'visite_technique',
+    nom: 'Visite Technique',
+    description: "Visite technique préalable au chantier. Évaluation sur site des besoins et faisabilité des travaux de rénovation énergétique.",
+    caracteristiques: [
+      { label: 'Durée', valeur: '1 à 2h sur site' },
+      { label: 'Livrable', valeur: 'Rapport de visite technique' },
+      { label: 'Objectif', valeur: 'Faisabilité et dimensionnement' },
+    ],
+    prixMoyenVente: 120,
+    prixMin: 100,
+    prixMax: 120,
+    prixParPartenaire: [
+      { installateurId: 'i1', prix: 120 },
+      { installateurId: 'i2', prix: 100 },
+    ],
+    aidesMPR: [],
+    aidesCEE: [],
+    installateurIds: [],
+    actif: true,
+    createdAt: '2024-01-01',
+    updatedAt: '2025-01-01',
+  },
 ]
