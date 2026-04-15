@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, LayoutGrid, List, Euro, ChevronRight, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -11,19 +11,20 @@ import EmptyState from '@/components/ui/EmptyState'
 import { ETAPES_PIPELINE, type EtapePipeline } from '@/types/opportunite'
 import clsx from 'clsx'
 
-// Étapes visibles dans le kanban (on exclut perdu)
 const ETAPES_KANBAN = ETAPES_PIPELINE.filter(e => e.id !== 'perdu')
 
 export default function Opportunites() {
   const { user, can } = useAuth()
   const navigate = useNavigate()
-  const { opportunites, moveEtape } = useOpportunitesStore()
+  const { opportunites, moveEtape, fetchOpportunites } = useOpportunitesStore()
   const { contacts } = useContactsStore()
   const { produits } = useProduitsStore()
 
   const [vue,    setVue]    = useState<'kanban' | 'liste'>('kanban')
   const [search, setSearch] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
+
+  useEffect(() => { fetchOpportunites() }, [])
 
   const myOpps = useMemo(() => {
     const all = can('opportunites.view_all') ? opportunites
@@ -38,12 +39,10 @@ export default function Opportunites() {
       : all
   }, [opportunites, user, can, search, contacts])
 
-  // Stats pipeline
-  const valeurTotal  = myOpps.reduce((s, o) => s + (o.montantDevis ?? 0), 0)
-  const nbActives    = myOpps.filter(o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)).length
-  const nbGagnes     = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
+  const valeurTotal = myOpps.reduce((s, o) => s + (o.montantDevis ?? 0), 0)
+  const nbActives   = myOpps.filter(o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)).length
+  const nbGagnes    = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
 
-  // Drag & drop
   function onDragStart(oppId: string) { setDragId(oppId) }
   function onDrop(etape: EtapePipeline) {
     if (dragId) { moveEtape(dragId, etape); setDragId(null) }
@@ -51,12 +50,11 @@ export default function Opportunites() {
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Valeur pipeline',    value: formatEuro(valeurTotal), sub: 'toutes étapes',       color: 'bg-blue-50 text-blue-600' },
-          { label: 'Opportunités actives', value: String(nbActives),     sub: 'en cours',            color: 'bg-orange-50 text-orange-500' },
-          { label: 'Dossiers signés',    value: String(nbGagnes),        sub: 'ce mois',             color: 'bg-green-50 text-green-600' },
+          { label: 'Valeur pipeline',      value: formatEuro(valeurTotal), color: 'bg-blue-50 text-blue-600' },
+          { label: 'Opportunités actives', value: String(nbActives),       color: 'bg-orange-50 text-orange-500' },
+          { label: 'Dossiers signés',      value: String(nbGagnes),        color: 'bg-green-50 text-green-600' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center mb-2', s.color)}>
@@ -68,7 +66,6 @@ export default function Opportunites() {
         ))}
       </div>
 
-      {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-surface-200 bg-white flex-1 max-w-72">
           <Search size={14} className="text-surface-400" />
@@ -93,7 +90,6 @@ export default function Opportunites() {
         )}
       </div>
 
-      {/* Vue Kanban */}
       {vue === 'kanban' && (
         <div className="flex gap-3 overflow-x-auto pb-4">
           {ETAPES_KANBAN.map(etape => {
@@ -103,7 +99,6 @@ export default function Opportunites() {
               <div key={etape.id} className="min-w-[220px] flex-shrink-0"
                 onDragOver={e => e.preventDefault()}
                 onDrop={() => onDrop(etape.id)}>
-                {/* Header colonne */}
                 <div className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ background: etape.couleur }} />
@@ -119,8 +114,6 @@ export default function Opportunites() {
                 {valeur > 0 && (
                   <p className="text-[10px] text-surface-400 px-1 mb-2">{formatEuro(valeur)}</p>
                 )}
-
-                {/* Cartes */}
                 <div className="space-y-2">
                   {items.map(opp => {
                     const contact = contacts.find(c => c.id === opp.contactId)
@@ -172,7 +165,6 @@ export default function Opportunites() {
         </div>
       )}
 
-      {/* Vue Liste */}
       {vue === 'liste' && (
         <div className="bg-white rounded-xl border border-surface-200 shadow-card overflow-hidden">
           {myOpps.length === 0 ? (
@@ -204,12 +196,8 @@ export default function Opportunites() {
                       <td className="px-4 py-3.5 text-xs font-semibold text-surface-800">{formatEuro(opp.montantDevis)}</td>
                       <td className="px-4 py-3.5">
                         <div className="space-y-0.5">
-                          {opp.dossierMPR && (
-                            <Badge label={`MPR ${STATUT_DOSSIER_LABELS[opp.dossierMPR.statut]}`} color={STATUT_DOSSIER_COLORS[opp.dossierMPR.statut]} />
-                          )}
-                          {opp.dossierCEE && (
-                            <Badge label={`CEE ${STATUT_DOSSIER_LABELS[opp.dossierCEE.statut]}`} color={STATUT_DOSSIER_COLORS[opp.dossierCEE.statut]} />
-                          )}
+                          {opp.dossierMPR && <Badge label={`MPR ${STATUT_DOSSIER_LABELS[opp.dossierMPR.statut]}`} color={STATUT_DOSSIER_COLORS[opp.dossierMPR.statut]} />}
+                          {opp.dossierCEE && <Badge label={`CEE ${STATUT_DOSSIER_LABELS[opp.dossierCEE.statut]}`} color={STATUT_DOSSIER_COLORS[opp.dossierCEE.statut]} />}
                         </div>
                       </td>
                       <td className="px-4 py-3.5">

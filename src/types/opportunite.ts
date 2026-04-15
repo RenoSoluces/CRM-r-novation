@@ -47,6 +47,12 @@ export interface DossierAide {
   dateVersement?: string
 }
 
+export interface Commission {
+  montantSociete?: number
+  montantCommercial?: number
+  montantApporteur?: number
+}
+
 export interface Opportunite {
   id: string
   reference: string
@@ -61,6 +67,7 @@ export interface Opportunite {
   commercialId: string
   apporteurId?: string
   regieId?: string
+  commission?: Commission
 
   dateCreation: string
   dateRdv?: string

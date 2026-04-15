@@ -393,31 +393,27 @@ function CreateOpportuniteModal({ open, onClose, contactId, commercialId, onCrea
     ? Math.max(0, Number(montantDevis) - Number(montantMPR || 0) - Number(montantCEE || 0))
     : 0
 
-  function handleCreate() {
-    if (!produitId) return
-    const ref = `OPP-${new Date().getFullYear()}-${String(opportunites.length + 1).padStart(3, '0')}`
-    const newOpp: Opportunite = {
-      id: `o${Date.now()}`,
-      reference: ref,
-      contactId,
-      produitId,
-      etape: 'nouveau_lead',
-      montantDevis:   montantDevis   ? Number(montantDevis)   : undefined,
-      montantAidesMPR: montantMPR   ? Number(montantMPR)     : undefined,
-      montantAidesCEE: montantCEE   ? Number(montantCEE)     : undefined,
-      montantNet:      montantDevis  ? montantNet             : undefined,
-      installateurId:  installateurId || undefined,
-      commercialId,
-      dateCreation: new Date().toISOString(),
-      dossierMPR: montantMPR ? { statut: 'a_constituer' } : undefined,
-      dossierCEE: montantCEE ? { statut: 'a_constituer' } : undefined,
-      activites: [],
-      notes,
-      updatedAt: new Date().toISOString(),
-    }
-    addOpportunite(newOpp)
-    onCreated(newOpp.id)
-  }
+  async function handleCreate() {
+  if (!produitId) return
+  const ref = `OPP-${new Date().getFullYear()}-${String(opportunites.length + 1).padStart(3, '0')}`
+  const opp = await addOpportunite({
+    reference: ref,
+    contactId,
+    produitId,
+    etape: 'nouveau_lead',
+    montantDevis:    montantDevis  ? Number(montantDevis)  : undefined,
+    montantAidesMPR: montantMPR   ? Number(montantMPR)    : undefined,
+    montantAidesCEE: montantCEE   ? Number(montantCEE)    : undefined,
+    montantNet:      montantDevis  ? montantNet            : undefined,
+    installateurId:  installateurId || undefined,
+    commercialId,
+    dossierMPR: montantMPR ? { statut: 'a_constituer' } : undefined,
+    dossierCEE: montantCEE ? { statut: 'a_constituer' } : undefined,
+    activites: [],
+    notes,
+  })
+  if (opp) onCreated(opp.id)
+}
 
   const fieldCls = 'w-full px-3 py-2 rounded-lg border border-surface-200 text-xs text-surface-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 bg-white'
 
