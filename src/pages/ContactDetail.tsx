@@ -49,17 +49,19 @@ export default function ContactDetail() {
     ? calculerTrancheMPR(form.revenuFiscal, form.nombrePersonnes)
     : form.trancheMPR
 
-  function handleSave() {
-    if (!form.nom || !form.prenom || !form.email) return
-    const now = new Date().toISOString()
-    if (isNew) {
-      addContact({ ...form, id: `ct${Date.now()}`, createdAt: now, updatedAt: now,
-        trancheMPR: tranche, commercialId: user?.id ?? '' })
-      navigate('/contacts')
-    } else {
-      updateContact(id!, { ...form, trancheMPR: tranche })
-      setEditing(false)
-    }
+ async function handleSave() {
+  if (!form.nom || !form.prenom || !form.email) return
+  if (isNew) {
+    const contact = await addContact({
+      ...form,
+      trancheMPR: tranche,
+      commercialId: user?.id ?? '',
+    })
+    if (contact) navigate('/contacts')
+  } else {
+    await updateContact(id!, { ...form, trancheMPR: tranche })
+    setEditing(false)
+  }
   }
 
   function handleDelete() {

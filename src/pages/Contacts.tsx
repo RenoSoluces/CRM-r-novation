@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect} from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Users, Building2, Phone, Mail, MapPin, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -21,11 +21,13 @@ const TRANCHE_LABELS: Record<string, string> = {
 export default function Contacts() {
   const { user, can } = useAuth()
   const navigate = useNavigate()
-  const { contacts } = useContactsStore()
+  const { contacts, fetchContacts } = useContactsStore()
 
   const [search,       setSearch]       = useState('')
   const [filtreStatut, setFiltreStatut] = useState<StatutContact | 'tous'>('tous')
   const [filtreType,   setFiltreType]   = useState<TypeContact | 'tous'>('tous')
+
+  useEffect(() => { fetchContacts() }, [])
 
   const mesContacts = useMemo(() => {
     if (can('contacts.view_all')) return contacts
