@@ -12,8 +12,12 @@ import { ETAPES_PIPELINE } from '@/types/opportunite'
 import { formatEuro, formatRelative, truncate } from '@/utils/formatters'
 import Badge, { FAMILLE_COLORS, FAMILLE_LABELS } from '@/components/ui/Badge'
 import clsx from 'clsx'
+// ── MODIF 3 : import Chart.js
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+import { Doughnut } from 'react-chartjs-2'
 
-// Étapes affichées dans le kanban du dashboard (les 5 principales)
+ChartJS.register(ArcElement, Tooltip, Legend)
+
 const ETAPES_DASHBOARD = [
   'nouveau_lead',
   'qualification',
@@ -32,6 +36,11 @@ const ACTIVITE_ICONS: Record<string, React.ReactNode> = {
   note:         <FileText size={11} />,
 }
 
+// ── MODIF 3 : couleurs camembert par famille
+const PIE_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316',
+]
+
 export default function Dashboard() {
   const { user, can } = useAuth()
   const navigate      = useNavigate()
@@ -39,7 +48,6 @@ export default function Dashboard() {
   const { contacts }     = useContactsStore()
   const { produits }     = useProduitsStore()
 
-  /* ── Filtrer selon le rôle ── */
   const myOpps = useMemo(() => {
     if (can('opportunites.view_all')) return opportunites
     if (user?.role === 'apporteur')   return opportunites.filter((o) => o.apporteurId === user.id)
@@ -52,10 +60,10 @@ export default function Dashboard() {
     return contacts.filter((c) => c.commercialId === user?.id)
   }, [contacts, user, can])
 
-  /* ── KPIs ── */
-  const caMois = myOpps
-    .filter((o) => ['signe', 'pose_livree'].includes(o.etape))
-    .reduce((sum, o) => sum + (o.montantDevis ?? 0), 0)
+  /* ── MODIF 1 : Commission en cours ── */
+  const commissionEnCours = myOpps
+    .filter((o) => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape))
+    .reduce((sum, o) => sum + (o.commission?.montantCommercial ?? 0), 0)
 
   const oppsActives = myOpps.filter(
     (o) => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)
@@ -79,57 +87,71 @@ export default function Dashboard() {
   const tauxConversion =
     totalFermes > 0 ? Math.round((gagnes / totalFermes) * 100) : 0
 
-  /* ── Pipeline kanban ── */
   const colonnes = ETAPES_DASHBOARD.map((etapeId) => {
     const info  = ETAPES_PIPELINE.find((e) => e.id === etapeId)!
     const items = myOpps.filter((o) => o.etape === etapeId)
     return { ...info, items }
   })
 
-  /* ── Activités récentes ── */
+  /* ── MODIF 2 : Activités récentes — guard sur activites ?? [] ── */
   const recentActivites = useMemo(() => {
-    const all: { activite: (typeof myOpps[0]['activites'][0]); opp: typeof myOpps[0]; contact: typeof contacts[0] | undefined }[] = []
+    const all: {
+      activite: (typeof myOpps[0]['activites'][0])
+      opp: typeof myOpps[0]
+      contact: typeof contacts[0] | undefined
+    }[] = []
     myOpps.forEach((opp) => {
       const contact = contacts.find((c) => c.id === opp.contactId)
-      opp.activites.forEach((a) => all.push({ activite: a, opp, contact }))
+      ;(opp.activites ?? []).forEach((a) => all.push({ activite: a, opp, contact }))
     })
     return all
-      .sort(
-        (a, b) =>
-          new Date(b.activite.date).getTime() -
-          new Date(a.activite.date).getTime()
+      .sort((a, b) =>
+        new Date(b.activite.date).getTime() - new Date(a.activite.date).getTime()
       )
       .slice(0, 6)
   }, [myOpps, contacts])
 
-  /* ── Top produits ── */
+  /* ── MODIF 3 : Top produits — vrais % sur total + données pour camembert ── */
   const topProduits = useMemo(() => {
     const counts: Record<string, number> = {}
     myOpps.forEach((o) => {
-      counts[o.produitId] = (counts[o.produitId] ?? 0) + 1
+      if (o.produitId) counts[o.produitId] = (counts[o.produitId] ?? 0) + 1
     })
-    const max = Math.max(...Object.values(counts), 1)
+    const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([produitId, count]) => ({
         produit: produits.find((p) => p.id === produitId),
         count,
-        pct: Math.round((count / max) * 100),
+        pct: Math.round((count / total) * 100),
       }))
       .filter((x) => x.produit)
   }, [myOpps, produits])
+
+  // Données Chart.js pour le camembert
+  const pieData = {
+    labels: topProduits.map(
+      ({ produit }) => truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)
+    ),
+    datasets: [{
+      data: topProduits.map(({ pct }) => pct),
+      backgroundColor: PIE_COLORS.slice(0, topProduits.length),
+      borderWidth: 2,
+      borderColor: '#ffffff',
+    }],
+  }
 
   return (
     <div className="space-y-5">
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-4 gap-4">
+        {/* ── MODIF 1 : CA mois → Commission en cours ── */}
         <KpiCard
-          label="CA ce mois"
-          value={formatEuro(caMois)}
-          trend="+18% vs mois dernier"
-          trendUp
+          label="Commission en cours"
+          value={formatEuro(commissionEnCours)}
+          sub="Sur opportunités actives"
           icon={<TrendingUp size={20} />}
           color="green"
         />
@@ -161,8 +183,9 @@ export default function Dashboard() {
       {/* ── Pipeline + Sidebar ── */}
       <div className="grid grid-cols-[1fr_300px] gap-5">
 
-        {/* Pipeline Kanban */}
+        {/* Pipeline Kanban — inchangé */}
         <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
+          {/* ... identique à avant ... */}
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-surface-800">
               Pipeline commercial
@@ -174,27 +197,20 @@ export default function Dashboard() {
               Voir tout <ArrowRight size={12} />
             </button>
           </div>
-
           <div className="flex gap-3 overflow-x-auto pb-1">
             {colonnes.map((col) => (
               <div key={col.id} className="min-w-[155px] flex-1">
-                {/* En-tête colonne */}
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-surface-500">
                     {col.label.replace(' ✓', '')}
                   </span>
                   <span
                     className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center"
-                    style={{
-                      background: col.couleur + '22',
-                      color: col.couleur,
-                    }}
+                    style={{ background: col.couleur + '22', color: col.couleur }}
                   >
                     {col.items.length}
                   </span>
                 </div>
-
-                {/* Cartes */}
                 <div className="space-y-2">
                   {col.items.slice(0, 3).map((opp) => {
                     const contact = contacts.find((c) => c.id === opp.contactId)
@@ -206,14 +222,10 @@ export default function Dashboard() {
                         className="w-full text-left p-2.5 bg-surface-50 hover:bg-surface-100 rounded-lg border border-surface-200 hover:border-surface-300 transition-all hover:shadow-sm"
                       >
                         <p className="text-xs font-semibold text-surface-800 leading-tight truncate">
-                          {contact
-                            ? `${contact.civilite ?? ''} ${contact.nom}`.trim()
-                            : opp.reference}
+                          {contact ? `${contact.civilite ?? ''} ${contact.nom}`.trim() : opp.reference}
                         </p>
                         {opp.montantDevis && (
-                          <p className="text-xs text-surface-600 mt-0.5">
-                            {formatEuro(opp.montantDevis)}
-                          </p>
+                          <p className="text-xs text-surface-600 mt-0.5">{formatEuro(opp.montantDevis)}</p>
                         )}
                         {contact && (
                           <p className="text-[10px] text-surface-400 truncate">
@@ -250,16 +262,14 @@ export default function Dashboard() {
         {/* Colonne droite */}
         <div className="space-y-4">
 
-          {/* Activités récentes */}
+          {/* ── MODIF 2 : Activités récentes — identique visuellement, bug corrigé ── */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
               Activités récentes
             </h3>
             <div className="space-y-1">
               {recentActivites.length === 0 ? (
-                <p className="text-xs text-surface-400 text-center py-6">
-                  Aucune activité
-                </p>
+                <p className="text-xs text-surface-400 text-center py-6">Aucune activité</p>
               ) : (
                 recentActivites.map(({ activite, opp, contact }) => (
                   <button
@@ -271,9 +281,7 @@ export default function Dashboard() {
                       {ACTIVITE_ICONS[activite.type] ?? <FileText size={11} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-surface-700 truncate">
-                        {activite.titre}
-                      </p>
+                      <p className="text-xs font-medium text-surface-700 truncate">{activite.titre}</p>
                       {contact && (
                         <p className="text-[10px] text-surface-400 truncate">
                           {contact.prenom} {contact.nom}
@@ -289,57 +297,65 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Top produits */}
+          {/* ── MODIF 3 : Top produits → Camembert ── */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
-              Top produits (mois)
+              Top produits
             </h3>
-            <div className="space-y-2.5">
-              {topProduits.map(({ produit, pct }) => (
-                <div key={produit!.id}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-surface-700 truncate flex-1">
-                      {truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)}
-                    </span>
-                    <span className="text-xs font-bold text-surface-700 ml-2">
-                      {pct}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-surface-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${pct}%`,
-                        background: FAMILLE_COLORS[produit!.famille] ?? '#22c55e',
-                      }}
-                    />
-                  </div>
+            {topProduits.length === 0 ? (
+              <p className="text-xs text-surface-400 text-center py-2">Aucune donnée</p>
+            ) : (
+              <>
+                {/* Légende */}
+                <div className="space-y-1 mb-3">
+                  {topProduits.map(({ produit, pct }, i) => (
+                    <div key={produit!.id} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                          style={{ background: PIE_COLORS[i] }}
+                        />
+                        <span className="text-xs text-surface-700 truncate">
+                          {truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 18)}
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-surface-700 flex-shrink-0">{pct}%</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {topProduits.length === 0 && (
-                <p className="text-xs text-surface-400 text-center py-2">
-                  Aucune donnée
-                </p>
-              )}
-            </div>
+                {/* Camembert */}
+                <div className="h-[160px] flex items-center justify-center">
+                  <Doughnut
+                    data={pieData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      cutout: '55%',
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: (ctx) => ` ${ctx.label} : ${ctx.parsed}%`,
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
+
         </div>
       </div>
     </div>
   )
 }
 
-/* ── Composant KPI Card ── */
-function KpiCard({
-  label, value, sub, trend, trendUp, icon, color,
-}: {
-  label: string
-  value: string
-  sub?: string
-  trend?: string
-  trendUp?: boolean
-  icon: React.ReactNode
-  color: 'green' | 'orange' | 'blue' | 'red'
+/* ── KpiCard — inchangé ── */
+function KpiCard({ label, value, sub, trend, trendUp, icon, color }: {
+  label: string; value: string; sub?: string; trend?: string; trendUp?: boolean
+  icon: React.ReactNode; color: 'green' | 'orange' | 'blue' | 'red'
 }) {
   const palette = {
     green:  { bg: 'bg-green-50',  icon: 'text-green-600',  border: 'border-green-100' },
@@ -347,13 +363,10 @@ function KpiCard({
     blue:   { bg: 'bg-blue-50',   icon: 'text-blue-600',   border: 'border-blue-100' },
     red:    { bg: 'bg-red-50',    icon: 'text-red-500',    border: 'border-red-100' },
   }[color]
-
   return (
     <div className={clsx('bg-white rounded-xl border shadow-card p-5', palette.border)}>
       <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-surface-500 uppercase tracking-wide">
-          {label}
-        </p>
+        <p className="text-xs font-medium text-surface-500 uppercase tracking-wide">{label}</p>
         <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', palette.bg, palette.icon)}>
           {icon}
         </div>
@@ -361,13 +374,10 @@ function KpiCard({
       <p className="font-display font-bold text-2xl text-surface-900">{value}</p>
       {sub && <p className="text-xs text-surface-500 mt-1">{sub}</p>}
       {trend && (
-        <p className={clsx(
-          'text-xs mt-1.5 font-medium flex items-center gap-1',
-          trendUp ? 'text-green-600' : 'text-red-500'
-        )}>
+        <p className={clsx('text-xs mt-1.5 font-medium flex items-center gap-1', trendUp ? 'text-green-600' : 'text-red-500')}>
           {trendUp ? '▲' : '▼'} {trend}
         </p>
       )}
     </div>
   )
-} 
+}
