@@ -80,6 +80,9 @@ export interface Opportunite {
   dossierMPR?: DossierAide
   dossierCEE?: DossierAide
 
+  dateRelance?: string
+  datePaiementPartenaire?: string
+
   activites: Activite[]
   notes?: string
   updatedAt: string

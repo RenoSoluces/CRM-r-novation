@@ -30,6 +30,8 @@ function mapRow(row: any): Opportunite {
     dateInstallation: row.date_installation,
     dossierMPR: row.dossier_mpr,
     dossierCEE: row.dossier_cee,
+    dateRelance:             row.date_relance,
+    datePaiementPartenaire:  row.date_paiement_partenaire,
     activites:  row.activites ?? [],
     notes:      row.notes,
     updatedAt:  row.updated_at,
