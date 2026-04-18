@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, MapPin, Plus, Save, ChevronRight, Edit2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, Plus, Save, ChevronRight, Edit2, Calendar } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOpportunitesStore } from '@/store/opportunitesStore'
 import { useContactsStore } from '@/store/contactsStore'
@@ -18,6 +18,12 @@ const ACTIVITE_ICONS: Record<string, string> = {
   signature: '✅', installation: '🔧', note: '📝',
 }
 
+// Convertit une date ISO en format datetime-local (YYYY-MM-DDTHH:mm)
+function toInputValue(iso?: string) {
+  if (!iso) return ''
+  return iso.slice(0, 16)
+}
+
 export default function OpportuniteDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -29,13 +35,16 @@ export default function OpportuniteDetail() {
   const { contacts, fetchContacts } = useContactsStore()
   const { produits } = useProduitsStore()
 
-  const [newActivite, setNewActivite]         = useState({ type: 'note' as Activite['type'], titre: '' })
-  const [showForm, setShowForm]               = useState(false)
-  const [editCommission, setEditCommission]   = useState(false)
-  const [commissionForm, setCommissionForm]   = useState({
-    montantSociete:    0,
-    montantCommercial: 0,
-    montantApporteur:  0,
+  const [newActivite, setNewActivite]       = useState({ type: 'note' as Activite['type'], titre: '' })
+  const [showForm, setShowForm]             = useState(false)
+  const [editCommission, setEditCommission] = useState(false)
+  const [editDates, setEditDates]           = useState(false)
+  const [commissionForm, setCommissionForm] = useState({
+    montantSociete: 0, montantCommercial: 0, montantApporteur: 0,
+  })
+  const [datesForm, setDatesForm] = useState({
+    dateRdv: '', dateDevis: '', dateSignature: '',
+    dateInstallation: '', dateRelance: '', datePaiementPartenaire: '',
   })
 
   useEffect(() => {
@@ -43,7 +52,7 @@ export default function OpportuniteDetail() {
     fetchContacts()
   }, [])
 
- const opp = opportunites.find(o => o.id === id)
+  const opp = opportunites.find(o => o.id === id)
 
   useEffect(() => {
     if (opp?.commission) {
@@ -51,6 +60,19 @@ export default function OpportuniteDetail() {
         montantSociete:    opp.commission.montantSociete    ?? 0,
         montantCommercial: opp.commission.montantCommercial ?? 0,
         montantApporteur:  opp.commission.montantApporteur  ?? 0,
+      })
+    }
+  }, [opp?.id])
+
+  useEffect(() => {
+    if (opp) {
+      setDatesForm({
+        dateRdv:                 toInputValue(opp.dateRdv),
+        dateDevis:               toInputValue(opp.dateDevis),
+        dateSignature:           toInputValue(opp.dateSignature),
+        dateInstallation:        toInputValue(opp.dateInstallation),
+        dateRelance:             toInputValue(opp.dateRelance),
+        datePaiementPartenaire:  toInputValue(opp.datePaiementPartenaire),
       })
     }
   }, [opp?.id])
@@ -84,6 +106,18 @@ export default function OpportuniteDetail() {
     await addActivite(opp!.id, a)
     setNewActivite({ type: 'note', titre: '' })
     setShowForm(false)
+  }
+
+  async function handleSaveDates() {
+    await updateOpportunite(opp!.id, {
+      dateRdv:                datesForm.dateRdv        ? new Date(datesForm.dateRdv).toISOString()        : undefined,
+      dateDevis:              datesForm.dateDevis       ? new Date(datesForm.dateDevis).toISOString()       : undefined,
+      dateSignature:          datesForm.dateSignature   ? new Date(datesForm.dateSignature).toISOString()   : undefined,
+      dateInstallation:       datesForm.dateInstallation ? new Date(datesForm.dateInstallation).toISOString() : undefined,
+      dateRelance:            datesForm.dateRelance      ? new Date(datesForm.dateRelance).toISOString()      : undefined,
+      datePaiementPartenaire: datesForm.datePaiementPartenaire ? new Date(datesForm.datePaiementPartenaire).toISOString() : undefined,
+    })
+    setEditDates(false)
   }
 
   return (
@@ -336,32 +370,24 @@ export default function OpportuniteDetail() {
                 </button>
               )}
             </div>
-
             {can('utilisateurs.edit') ? (
               editCommission ? (
-                /* Formulaire édition */
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
-                      Commission société (€)
-                    </label>
+                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">Commission société (€)</label>
                     <input type="number" value={commissionForm.montantSociete}
                       onChange={e => setCommissionForm(f => ({ ...f, montantSociete: Number(e.target.value) }))}
                       className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
-                      Commission commercial (€)
-                    </label>
+                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">Commission commercial (€)</label>
                     <input type="number" value={commissionForm.montantCommercial}
                       onChange={e => setCommissionForm(f => ({ ...f, montantCommercial: Number(e.target.value) }))}
                       className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
                   </div>
                   {opp.apporteurId && (
                     <div>
-                      <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
-                        Commission apporteur (€)
-                      </label>
+                      <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">Commission apporteur (€)</label>
                       <input type="number" value={commissionForm.montantApporteur}
                         onChange={e => setCommissionForm(f => ({ ...f, montantApporteur: Number(e.target.value) }))}
                         className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
@@ -372,17 +398,13 @@ export default function OpportuniteDetail() {
                       className="flex-1 py-2 rounded-lg border border-surface-200 text-xs font-medium text-surface-600 hover:bg-surface-50 transition-colors">
                       Annuler
                     </button>
-                    <button onClick={async () => {
-                      await updateCommission(opp.id, commissionForm)
-                      setEditCommission(false)
-                    }}
+                    <button onClick={async () => { await updateCommission(opp.id, commissionForm); setEditCommission(false) }}
                       className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
                       Enregistrer
                     </button>
                   </div>
                 </div>
               ) : (
-                /* Vue lecture admin */
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-surface-500">Société</span>
@@ -409,10 +431,8 @@ export default function OpportuniteDetail() {
                         <span className="text-xs font-bold text-orange-600">{formatEuro(commLeft)}</span>
                       </div>
                       {commLeft > 0 ? (
-                        <button
-                          onClick={() => payerCommission(opp.id, commDue)}
-                          className="w-full mt-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
-                        >
+                        <button onClick={() => payerCommission(opp.id, commDue)}
+                          className="w-full mt-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors">
                           Marquer comme payée
                         </button>
                       ) : (
@@ -425,7 +445,6 @@ export default function OpportuniteDetail() {
                 </div>
               )
             ) : (
-              /* Vue lecture commercial / apporteur */
               <div className="space-y-2">
                 {user?.role === 'commercial' && (
                   <>
@@ -455,23 +474,74 @@ export default function OpportuniteDetail() {
             )}
           </div>
 
-          {/* Dates clés */}
+          {/* ── Dates clés — éditable ── */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Dates clés</h3>
-            <div className="space-y-2">
-              {[
-                { label: 'Création',     date: opp.dateCreation },
-                { label: 'RDV',          date: opp.dateRdv },
-                { label: 'Devis envoyé', date: opp.dateDevis },
-                { label: 'Signature',    date: opp.dateSignature },
-                { label: 'Installation', date: opp.dateInstallation },
-              ].filter(d => d.date).map(d => (
-                <div key={d.label} className="flex items-center justify-between">
-                  <span className="text-[10px] text-surface-500">{d.label}</span>
-                  <span className="text-[10px] font-medium text-surface-700">{formatDate(d.date)}</span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display font-semibold text-surface-800 text-sm flex items-center gap-1.5">
+                <Calendar size={13} className="text-surface-400" /> Dates clés
+              </h3>
+              {can('opportunites.edit') && !editDates && (
+                <button onClick={() => setEditDates(true)}
+                  className="flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium">
+                  <Edit2 size={11} /> Modifier
+                </button>
+              )}
             </div>
+
+            {editDates ? (
+              <div className="space-y-2.5">
+                {[
+                  { label: 'RDV',                    key: 'dateRdv' },
+                  { label: 'Devis envoyé',            key: 'dateDevis' },
+                  { label: 'Signature',               key: 'dateSignature' },
+                  { label: 'Installation',            key: 'dateInstallation' },
+                  { label: 'Relance',                 key: 'dateRelance' },
+                  ...(can('opportunites.view_all') ? [{ label: 'Paiement partenaire', key: 'datePaiementPartenaire' }] : []),
+                ].map(({ label, key }) => (
+                  <div key={key}>
+                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
+                      {label}
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={datesForm[key as keyof typeof datesForm]}
+                      onChange={e => setDatesForm(f => ({ ...f, [key]: e.target.value }))}
+                      className="w-full px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 outline-none focus:border-brand-400 bg-white"
+                    />
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setEditDates(false)}
+                    className="flex-1 py-2 rounded-lg border border-surface-200 text-xs font-medium text-surface-600 hover:bg-surface-50 transition-colors">
+                    Annuler
+                  </button>
+                  <button onClick={handleSaveDates}
+                    className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {[
+                  { label: 'Création',             date: opp.dateCreation },
+                  { label: 'RDV',                  date: opp.dateRdv },
+                  { label: 'Devis envoyé',          date: opp.dateDevis },
+                  { label: 'Signature',             date: opp.dateSignature },
+                  { label: 'Installation',          date: opp.dateInstallation },
+                  { label: 'Relance',               date: opp.dateRelance },
+                  ...(can('opportunites.view_all') ? [{ label: 'Paiement partenaire', date: opp.datePaiementPartenaire }] : []),
+                ].filter(d => d.date).map(d => (
+                  <div key={d.label} className="flex items-center justify-between">
+                    <span className="text-[10px] text-surface-500">{d.label}</span>
+                    <span className="text-[10px] font-medium text-surface-700">{formatDate(d.date)}</span>
+                  </div>
+                ))}
+                {!opp.dateRdv && !opp.dateDevis && !opp.dateSignature && !opp.dateInstallation && !opp.dateRelance && (
+                  <p className="text-[10px] text-surface-400 text-center py-2">Aucune date renseignée</p>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
