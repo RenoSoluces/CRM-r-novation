@@ -51,6 +51,7 @@ export interface Commission {
   montantSociete?: number
   montantCommercial?: number
   montantApporteur?: number
+  commissionPayee?: number
 }
 
 export interface Opportunite {
@@ -68,6 +69,7 @@ export interface Opportunite {
   apporteurId?: string
   regieId?: string
   commission?: Commission
+  commissionPayee?: number
 
   dateCreation: string
   dateRdv?: string

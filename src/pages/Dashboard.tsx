@@ -11,10 +11,9 @@ import { useProduitsStore } from '@/store/produitsStore'
 import { ETAPES_PIPELINE } from '@/types/opportunite'
 import { formatEuro, formatRelative, truncate } from '@/utils/formatters'
 import Badge, { FAMILLE_COLORS, FAMILLE_LABELS } from '@/components/ui/Badge'
-import clsx from 'clsx'
-// ── MODIF 3 : import Chart.js
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+import clsx from 'clsx'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -36,10 +35,7 @@ const ACTIVITE_ICONS: Record<string, React.ReactNode> = {
   note:         <FileText size={11} />,
 }
 
-// ── MODIF 3 : couleurs camembert par famille
-const PIE_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316',
-]
+const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316']
 
 export default function Dashboard() {
   const { user, can } = useAuth()
@@ -48,73 +44,72 @@ export default function Dashboard() {
   const { contacts }     = useContactsStore()
   const { produits }     = useProduitsStore()
 
+  /* ── Filtrer selon le rôle ── */
   const myOpps = useMemo(() => {
     if (can('opportunites.view_all')) return opportunites
-    if (user?.role === 'apporteur')   return opportunites.filter((o) => o.apporteurId === user.id)
-    return opportunites.filter((o) => o.commercialId === user?.id)
+    if (user?.role === 'apporteur')   return opportunites.filter(o => o.apporteurId === user.id)
+    return opportunites.filter(o => o.commercialId === user?.id)
   }, [opportunites, user, can])
 
   const myContacts = useMemo(() => {
     if (can('contacts.view_all'))   return contacts
-    if (user?.role === 'apporteur') return contacts.filter((c) => c.apporteurId === user.id)
-    return contacts.filter((c) => c.commercialId === user?.id)
+    if (user?.role === 'apporteur') return contacts.filter(c => c.apporteurId === user.id)
+    return contacts.filter(c => c.commercialId === user?.id)
   }, [contacts, user, can])
 
-  /* ── MODIF 1 : Commission en cours ── */
+  /* ── KPIs ── */
   const commissionEnCours = myOpps
-    .filter((o) => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape))
-    .reduce((sum, o) => sum + (o.commission?.montantCommercial ?? 0), 0)
+    .filter(o => o.etape !== 'perdu')
+    .reduce((sum, o) => {
+      const due  = o.commission?.montantCommercial ?? 0
+      const paid = o.commissionPayee ?? 0
+      return sum + Math.max(0, due - paid)
+    }, 0)
 
   const oppsActives = myOpps.filter(
-    (o) => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)
+    o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)
   )
-  const valeurPipeline = oppsActives.reduce(
-    (sum, o) => sum + (o.montantDevis ?? 0), 0
-  )
+  const valeurPipeline = oppsActives.reduce((sum, o) => sum + (o.montantDevis ?? 0), 0)
 
   const now = new Date()
-  const nouveauxLeads = myContacts.filter((c) => {
+  const nouveauxLeads = myContacts.filter(c => {
     const diff = now.getTime() - new Date(c.createdAt).getTime()
     return diff < 7 * 24 * 60 * 60 * 1000
   })
 
-  const gagnes = myOpps.filter((o) =>
-    ['signe', 'pose_livree'].includes(o.etape)
+  const gagnes = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
+  const totalFermes = myOpps.filter(
+    o => !['nouveau_lead', 'qualification'].includes(o.etape)
   ).length
-  const totalFermes = myOpps.filter((o) =>
-    !['nouveau_lead', 'qualification'].includes(o.etape)
-  ).length
-  const tauxConversion =
-    totalFermes > 0 ? Math.round((gagnes / totalFermes) * 100) : 0
+  const tauxConversion = totalFermes > 0 ? Math.round((gagnes / totalFermes) * 100) : 0
 
-  const colonnes = ETAPES_DASHBOARD.map((etapeId) => {
-    const info  = ETAPES_PIPELINE.find((e) => e.id === etapeId)!
-    const items = myOpps.filter((o) => o.etape === etapeId)
+  /* ── Pipeline kanban ── */
+  const colonnes = ETAPES_DASHBOARD.map(etapeId => {
+    const info  = ETAPES_PIPELINE.find(e => e.id === etapeId)!
+    const items = myOpps.filter(o => o.etape === etapeId)
     return { ...info, items }
   })
 
-  /* ── MODIF 2 : Activités récentes — guard sur activites ?? [] ── */
+  /* ── Activités récentes ── */
   const recentActivites = useMemo(() => {
     const all: {
       activite: (typeof myOpps[0]['activites'][0])
       opp: typeof myOpps[0]
       contact: typeof contacts[0] | undefined
     }[] = []
-    myOpps.forEach((opp) => {
-      const contact = contacts.find((c) => c.id === opp.contactId)
-      ;(opp.activites ?? []).forEach((a) => all.push({ activite: a, opp, contact }))
+    myOpps.forEach(opp => {
+      const contact = contacts.find(c => c.id === opp.contactId)
+      ;(opp.activites ?? []).forEach(a => all.push({ activite: a, opp, contact }))
     })
     return all
-      .sort((a, b) =>
-        new Date(b.activite.date).getTime() - new Date(a.activite.date).getTime()
-      )
+      .sort((a, b) => new Date(b.activite.date).getTime() - new Date(a.activite.date).getTime())
       .slice(0, 6)
   }, [myOpps, contacts])
 
-  /* ── MODIF 3 : Top produits — vrais % sur total + données pour camembert ── */
+  /* ── Top produits ── */
   const topProduits = useMemo(() => {
     const counts: Record<string, number> = {}
-    myOpps.forEach((o) => {
+    myOpps.forEach(o => {
       if (o.produitId) counts[o.produitId] = (counts[o.produitId] ?? 0) + 1
     })
     const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1
@@ -122,17 +117,16 @@ export default function Dashboard() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([produitId, count]) => ({
-        produit: produits.find((p) => p.id === produitId),
+        produit: produits.find(p => p.id === produitId),
         count,
         pct: Math.round((count / total) * 100),
       }))
-      .filter((x) => x.produit)
+      .filter(x => x.produit)
   }, [myOpps, produits])
 
-  // Données Chart.js pour le camembert
   const pieData = {
-    labels: topProduits.map(
-      ({ produit }) => truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)
+    labels: topProduits.map(({ produit }) =>
+      truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)
     ),
     datasets: [{
       data: topProduits.map(({ pct }) => pct),
@@ -147,11 +141,10 @@ export default function Dashboard() {
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-4 gap-4">
-        {/* ── MODIF 1 : CA mois → Commission en cours ── */}
         <KpiCard
           label="Commission en cours"
           value={formatEuro(commissionEnCours)}
-          sub="Sur opportunités actives"
+          sub="Commissions non encore payées"
           icon={<TrendingUp size={20} />}
           color="green"
         />
@@ -183,13 +176,10 @@ export default function Dashboard() {
       {/* ── Pipeline + Sidebar ── */}
       <div className="grid grid-cols-[1fr_300px] gap-5">
 
-        {/* Pipeline Kanban — inchangé */}
+        {/* Pipeline Kanban */}
         <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
-          {/* ... identique à avant ... */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-semibold text-surface-800">
-              Pipeline commercial
-            </h2>
+            <h2 className="font-display font-semibold text-surface-800">Pipeline commercial</h2>
             <button
               onClick={() => navigate('/opportunites')}
               className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1 font-medium"
@@ -198,7 +188,7 @@ export default function Dashboard() {
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {colonnes.map((col) => (
+            {colonnes.map(col => (
               <div key={col.id} className="min-w-[155px] flex-1">
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-surface-500">
@@ -212,9 +202,9 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {col.items.slice(0, 3).map((opp) => {
-                    const contact = contacts.find((c) => c.id === opp.contactId)
-                    const produit = produits.find((p) => p.id === opp.produitId)
+                  {col.items.slice(0, 3).map(opp => {
+                    const contact = contacts.find(c => c.id === opp.contactId)
+                    const produit = produits.find(p => p.id === opp.produitId)
                     return (
                       <button
                         key={opp.id}
@@ -262,7 +252,7 @@ export default function Dashboard() {
         {/* Colonne droite */}
         <div className="space-y-4">
 
-          {/* ── MODIF 2 : Activités récentes — identique visuellement, bug corrigé ── */}
+          {/* Activités récentes */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
               Activités récentes
@@ -297,7 +287,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── MODIF 3 : Top produits → Camembert ── */}
+          {/* Top produits — camembert */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
               Top produits
@@ -306,7 +296,6 @@ export default function Dashboard() {
               <p className="text-xs text-surface-400 text-center py-2">Aucune donnée</p>
             ) : (
               <>
-                {/* Légende */}
                 <div className="space-y-1 mb-3">
                   {topProduits.map(({ produit, pct }, i) => (
                     <div key={produit!.id} className="flex items-center justify-between gap-2">
@@ -323,7 +312,6 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-                {/* Camembert */}
                 <div className="h-[160px] flex items-center justify-center">
                   <Doughnut
                     data={pieData}
@@ -335,7 +323,7 @@ export default function Dashboard() {
                         legend: { display: false },
                         tooltip: {
                           callbacks: {
-                            label: (ctx) => ` ${ctx.label} : ${ctx.parsed}%`,
+                            label: ctx => ` ${ctx.label} : ${ctx.parsed}%`,
                           },
                         },
                       },
@@ -352,10 +340,17 @@ export default function Dashboard() {
   )
 }
 
-/* ── KpiCard — inchangé ── */
-function KpiCard({ label, value, sub, trend, trendUp, icon, color }: {
-  label: string; value: string; sub?: string; trend?: string; trendUp?: boolean
-  icon: React.ReactNode; color: 'green' | 'orange' | 'blue' | 'red'
+/* ── Composant KPI Card ── */
+function KpiCard({
+  label, value, sub, trend, trendUp, icon, color,
+}: {
+  label: string
+  value: string
+  sub?: string
+  trend?: string
+  trendUp?: boolean
+  icon: React.ReactNode
+  color: 'green' | 'orange' | 'blue' | 'red'
 }) {
   const palette = {
     green:  { bg: 'bg-green-50',  icon: 'text-green-600',  border: 'border-green-100' },
@@ -363,6 +358,7 @@ function KpiCard({ label, value, sub, trend, trendUp, icon, color }: {
     blue:   { bg: 'bg-blue-50',   icon: 'text-blue-600',   border: 'border-blue-100' },
     red:    { bg: 'bg-red-50',    icon: 'text-red-500',    border: 'border-red-100' },
   }[color]
+
   return (
     <div className={clsx('bg-white rounded-xl border shadow-card p-5', palette.border)}>
       <div className="flex items-start justify-between mb-3">

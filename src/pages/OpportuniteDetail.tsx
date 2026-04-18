@@ -22,26 +22,28 @@ export default function OpportuniteDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, can } = useAuth()
-  const { opportunites, updateOpportunite, moveEtape, addActivite, updateCommission, fetchOpportunites } = useOpportunitesStore()
+  const {
+    opportunites, updateOpportunite, moveEtape, addActivite,
+    updateCommission, payerCommission, fetchOpportunites,
+  } = useOpportunitesStore()
   const { contacts, fetchContacts } = useContactsStore()
   const { produits } = useProduitsStore()
 
-  const [newActivite, setNewActivite] = useState({ type: 'note' as Activite['type'], titre: '' })
-  const [showForm, setShowForm] = useState(false)
-  const [editCommission, setEditCommission] = useState(false)
+  const [newActivite, setNewActivite]         = useState({ type: 'note' as Activite['type'], titre: '' })
+  const [showForm, setShowForm]               = useState(false)
+  const [editCommission, setEditCommission]   = useState(false)
+  const [commissionForm, setCommissionForm]   = useState({
+    montantSociete:    0,
+    montantCommercial: 0,
+    montantApporteur:  0,
+  })
 
   useEffect(() => {
     fetchOpportunites()
     fetchContacts()
   }, [])
 
-  const opp = opportunites.find(o => o.id === id)
-
-  const [commissionForm, setCommissionForm] = useState({
-    montantSociete:    opp?.commission?.montantSociete    ?? 0,
-    montantCommercial: opp?.commission?.montantCommercial ?? 0,
-    montantApporteur:  opp?.commission?.montantApporteur  ?? 0,
-  })
+ const opp = opportunites.find(o => o.id === id)
 
   useEffect(() => {
     if (opp?.commission) {
@@ -59,14 +61,18 @@ export default function OpportuniteDetail() {
     </div>
   )
 
-  const contact   = contacts.find(c => c.id === opp.contactId)
-  const produit   = produits.find(p => p.id === opp.produitId)
-  const etapeInfo = ETAPES_PIPELINE.find(e => e.id === opp.etape)
+  const contact    = contacts.find(c => c.id === opp.contactId)
+  const produit    = produits.find(p => p.id === opp.produitId)
+  const etapeInfo  = ETAPES_PIPELINE.find(e => e.id === opp.etape)
   const etapeIndex = ETAPES_PIPELINE.findIndex(e => e.id === opp.etape)
   const aidesTotal = (opp.montantAidesMPR ?? 0) + (opp.montantAidesCEE ?? 0)
 
+  const commDue  = opp.commission?.montantCommercial ?? 0
+  const commPaid = opp.commissionPayee ?? 0
+  const commLeft = Math.max(0, commDue - commPaid)
+
   function handleMoveEtape(etape: EtapePipeline) {
-    moveEtape(opp.id, etape)
+    moveEtape(opp!.id, etape)
   }
 
   async function handleAddActivite() {
@@ -75,13 +81,14 @@ export default function OpportuniteDetail() {
       id: `a${Date.now()}`, ...newActivite,
       date: new Date().toISOString(), auteurId: user?.id ?? '',
     }
-    await addActivite(opp.id, a)
+    await addActivite(opp!.id, a)
     setNewActivite({ type: 'note', titre: '' })
     setShowForm(false)
   }
 
   return (
     <div className="space-y-5 max-w-5xl">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <button onClick={() => navigate('/opportunites')}
@@ -132,6 +139,7 @@ export default function OpportuniteDetail() {
       </div>
 
       <div className="grid grid-cols-[1fr_320px] gap-5">
+
         {/* Colonne principale */}
         <div className="space-y-4">
 
@@ -181,15 +189,23 @@ export default function OpportuniteDetail() {
                       <p className="text-xs font-semibold text-surface-700">{label}</p>
                       <Badge label={STATUT_DOSSIER_LABELS[dossier.statut]} color={STATUT_DOSSIER_COLORS[dossier.statut]} />
                     </div>
-                    {dossier.montant && <p className="text-sm font-bold text-surface-800">{formatEuro(dossier.montant)}</p>}
-                    {dossier.dateDepot && <p className="text-[10px] text-surface-400">Déposé le {formatDate(dossier.dateDepot)}</p>}
-                    {dossier.dateVersement && <p className="text-[10px] text-green-600 font-medium">Versé le {formatDate(dossier.dateVersement)}</p>}
+                    {dossier.montant && (
+                      <p className="text-sm font-bold text-surface-800">{formatEuro(dossier.montant)}</p>
+                    )}
+                    {dossier.dateDepot && (
+                      <p className="text-[10px] text-surface-400">Déposé le {formatDate(dossier.dateDepot)}</p>
+                    )}
+                    {dossier.dateVersement && (
+                      <p className="text-[10px] text-green-600 font-medium">Versé le {formatDate(dossier.dateVersement)}</p>
+                    )}
                     {can('opportunites.edit') && (
-                      <select value={dossier.statut}
+                      <select
+                        value={dossier.statut}
                         onChange={e => updateOpportunite(opp.id, {
                           [key]: { ...dossier, statut: e.target.value as typeof dossier.statut }
                         })}
-                        className="w-full px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 bg-white outline-none mt-1">
+                        className="w-full px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 bg-white outline-none mt-1"
+                      >
                         <option value="a_constituer">À constituer</option>
                         <option value="en_cours">En cours</option>
                         <option value="depose">Déposé</option>
@@ -217,18 +233,22 @@ export default function OpportuniteDetail() {
             {showForm && (
               <div className="mb-4 p-3 bg-surface-50 rounded-xl border border-surface-200 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <select value={newActivite.type}
+                  <select
+                    value={newActivite.type}
                     onChange={e => setNewActivite(a => ({ ...a, type: e.target.value as Activite['type'] }))}
-                    className="px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 bg-white outline-none">
+                    className="px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 bg-white outline-none"
+                  >
                     {['appel', 'email', 'rdv', 'devis', 'signature', 'installation', 'note'].map(t => (
                       <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                     ))}
                   </select>
-                  <input value={newActivite.titre}
+                  <input
+                    value={newActivite.titre}
                     onChange={e => setNewActivite(a => ({ ...a, titre: e.target.value }))}
                     placeholder="Description de l'activité"
                     className="px-2 py-1.5 rounded-lg border border-surface-200 text-xs text-surface-700 outline-none focus:border-brand-400"
-                    onKeyDown={e => e.key === 'Enter' && handleAddActivite()} />
+                    onKeyDown={e => e.key === 'Enter' && handleAddActivite()}
+                  />
                 </div>
                 <div className="flex gap-2">
                   <button onClick={handleAddActivite}
@@ -243,23 +263,26 @@ export default function OpportuniteDetail() {
               </div>
             )}
             <div className="space-y-3">
-              {[...opp.activites].reverse().map(a => (
+              {[...(opp.activites ?? [])].reverse().map(a => (
                 <div key={a.id} className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">
                     {ACTIVITE_ICONS[a.type] ?? '📝'}
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-medium text-surface-800">{a.titre}</p>
-                    {a.description && <p className="text-[10px] text-surface-500 mt-0.5">{a.description}</p>}
+                    {a.description && (
+                      <p className="text-[10px] text-surface-500 mt-0.5">{a.description}</p>
+                    )}
                   </div>
                   <span className="text-[10px] text-surface-400 flex-shrink-0">{formatRelative(a.date)}</span>
                 </div>
               ))}
-              {opp.activites.length === 0 && (
+              {(opp.activites ?? []).length === 0 && (
                 <p className="text-xs text-surface-400 text-center py-4">Aucune activité enregistrée</p>
               )}
             </div>
           </div>
+
         </div>
 
         {/* Colonne droite */}
@@ -316,6 +339,7 @@ export default function OpportuniteDetail() {
 
             {can('utilisateurs.edit') ? (
               editCommission ? (
+                /* Formulaire édition */
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
@@ -358,6 +382,7 @@ export default function OpportuniteDetail() {
                   </div>
                 </div>
               ) : (
+                /* Vue lecture admin */
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-surface-500">Société</span>
@@ -365,7 +390,7 @@ export default function OpportuniteDetail() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-surface-500">Commercial</span>
-                    <span className="text-xs font-semibold text-surface-800">{formatEuro(opp.commission?.montantCommercial)}</span>
+                    <span className="text-xs font-semibold text-surface-800">{formatEuro(commDue)}</span>
                   </div>
                   {opp.apporteurId && (
                     <div className="flex justify-between items-center">
@@ -373,15 +398,52 @@ export default function OpportuniteDetail() {
                       <span className="text-xs font-semibold text-surface-800">{formatEuro(opp.commission?.montantApporteur)}</span>
                     </div>
                   )}
+                  {commDue > 0 && (
+                    <div className="mt-3 pt-3 border-t border-surface-100 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-surface-500">Déjà payé</span>
+                        <span className="text-xs font-semibold text-green-600">{formatEuro(commPaid)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-surface-600">Reste à payer</span>
+                        <span className="text-xs font-bold text-orange-600">{formatEuro(commLeft)}</span>
+                      </div>
+                      {commLeft > 0 ? (
+                        <button
+                          onClick={() => payerCommission(opp.id, commDue)}
+                          className="w-full mt-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
+                        >
+                          Marquer comme payée
+                        </button>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-green-50 border border-green-100">
+                          <span className="text-xs font-semibold text-green-600">Commission payée ✓</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             ) : (
+              /* Vue lecture commercial / apporteur */
               <div className="space-y-2">
                 {user?.role === 'commercial' && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-surface-500">Ma commission</span>
-                    <span className="text-xs font-semibold text-green-600">{formatEuro(opp.commission?.montantCommercial)}</span>
-                  </div>
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-surface-500">Ma commission</span>
+                      <span className="text-xs font-semibold text-surface-800">{formatEuro(commDue)}</span>
+                    </div>
+                    {commPaid > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-surface-500">Déjà reçu</span>
+                        <span className="text-xs font-semibold text-green-600">{formatEuro(commPaid)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-surface-600">À recevoir</span>
+                      <span className="text-xs font-bold text-orange-600">{formatEuro(commLeft)}</span>
+                    </div>
+                  </>
                 )}
                 {user?.role === 'apporteur' && (
                   <div className="flex justify-between items-center">
@@ -398,11 +460,11 @@ export default function OpportuniteDetail() {
             <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Dates clés</h3>
             <div className="space-y-2">
               {[
-                { label: 'Création',      date: opp.dateCreation },
-                { label: 'RDV',           date: opp.dateRdv },
-                { label: 'Devis envoyé',  date: opp.dateDevis },
-                { label: 'Signature',     date: opp.dateSignature },
-                { label: 'Installation',  date: opp.dateInstallation },
+                { label: 'Création',     date: opp.dateCreation },
+                { label: 'RDV',          date: opp.dateRdv },
+                { label: 'Devis envoyé', date: opp.dateDevis },
+                { label: 'Signature',    date: opp.dateSignature },
+                { label: 'Installation', date: opp.dateInstallation },
               ].filter(d => d.date).map(d => (
                 <div key={d.label} className="flex items-center justify-between">
                   <span className="text-[10px] text-surface-500">{d.label}</span>
