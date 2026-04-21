@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp, Target, Users, Percent,
-  Phone, Mail, FileText, Trophy, ArrowRight, Star,
+  Phone, Mail, FileText, Trophy, ArrowRight, Star, Building2, Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOpportunitesStore } from '@/store/opportunitesStore'
@@ -18,21 +18,13 @@ import clsx from 'clsx'
 ChartJS.register(ArcElement, Tooltip, Legend)
 
 const ETAPES_DASHBOARD = [
-  'nouveau_lead',
-  'qualification',
-  'devis_envoye',
-  'dossier_mpr_cee',
-  'signe',
+  'nouveau_lead', 'qualification', 'devis_envoye', 'dossier_mpr_cee', 'signe',
 ] as const
 
 const ACTIVITE_ICONS: Record<string, React.ReactNode> = {
-  appel:        <Phone size={11} />,
-  email:        <Mail size={11} />,
-  rdv:          <Target size={11} />,
-  devis:        <FileText size={11} />,
-  signature:    <Trophy size={11} />,
-  installation: <Star size={11} />,
-  note:         <FileText size={11} />,
+  appel: <Phone size={11} />, email: <Mail size={11} />, rdv: <Target size={11} />,
+  devis: <FileText size={11} />, signature: <Trophy size={11} />,
+  installation: <Star size={11} />, note: <FileText size={11} />,
 }
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316']
@@ -44,7 +36,6 @@ export default function Dashboard() {
   const { contacts }     = useContactsStore()
   const { produits }     = useProduitsStore()
 
-  /* ── Filtrer selon le rôle ── */
   const myOpps = useMemo(() => {
     if (can('opportunites.view_all')) return opportunites
     if (user?.role === 'apporteur')   return opportunites.filter(o => o.apporteurId === user.id)
@@ -57,7 +48,7 @@ export default function Dashboard() {
     return contacts.filter(c => c.commercialId === user?.id)
   }, [contacts, user, can])
 
-  /* ── KPIs ── */
+  /* ── KPIs communs ── */
   const commissionEnCours = myOpps
     .filter(o => o.etape !== 'perdu')
     .reduce((sum, o) => {
@@ -66,9 +57,7 @@ export default function Dashboard() {
       return sum + Math.max(0, due - paid)
     }, 0)
 
-  const oppsActives = myOpps.filter(
-    o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape)
-  )
+  const oppsActives    = myOpps.filter(o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape))
   const valeurPipeline = oppsActives.reduce((sum, o) => sum + (o.montantDevis ?? 0), 0)
 
   const now = new Date()
@@ -77,11 +66,29 @@ export default function Dashboard() {
     return diff < 7 * 24 * 60 * 60 * 1000
   })
 
-  const gagnes = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
-  const totalFermes = myOpps.filter(
-    o => !['nouveau_lead', 'qualification'].includes(o.etape)
-  ).length
+  const gagnes      = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
+  const totalFermes = myOpps.filter(o => !['nouveau_lead', 'qualification'].includes(o.etape)).length
   const tauxConversion = totalFermes > 0 ? Math.round((gagnes / totalFermes) * 100) : 0
+
+  /* ── KPIs admin société ── */
+  const commSocieteEnCours = opportunites
+    .filter(o => o.etape !== 'perdu')
+    .reduce((sum, o) => sum + Math.max(0, (o.commission?.montantSociete ?? 0)), 0)
+
+  const commSocieteTotale = opportunites
+    .reduce((sum, o) => sum + (o.commission?.montantSociete ?? 0), 0)
+
+  const commCommerciauxDues = opportunites
+    .filter(o => o.etape !== 'perdu')
+    .reduce((sum, o) => {
+      const due  = o.commission?.montantCommercial ?? 0
+      const paid = o.commissionPayee ?? 0
+      return sum + Math.max(0, due - paid)
+    }, 0)
+
+  const commApporteursDues = opportunites
+    .filter(o => o.etape !== 'perdu')
+    .reduce((sum, o) => sum + Math.max(0, (o.commission?.montantApporteur ?? 0)), 0)
 
   /* ── Pipeline kanban ── */
   const colonnes = ETAPES_DASHBOARD.map(etapeId => {
@@ -125,21 +132,52 @@ export default function Dashboard() {
   }, [myOpps, produits])
 
   const pieData = {
-    labels: topProduits.map(({ produit }) =>
-      truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)
-    ),
+    labels: topProduits.map(({ produit }) => truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)),
     datasets: [{
       data: topProduits.map(({ pct }) => pct),
       backgroundColor: PIE_COLORS.slice(0, topProduits.length),
-      borderWidth: 2,
-      borderColor: '#ffffff',
+      borderWidth: 2, borderColor: '#ffffff',
     }],
   }
 
   return (
     <div className="space-y-5">
 
-      {/* ── KPI Cards ── */}
+      {/* ── KPIs admin société — visibles uniquement par l'admin ── */}
+      {can('opportunites.view_all') && (
+        <div className="grid grid-cols-4 gap-4">
+          <KpiCard
+            label="Comm. société en cours"
+            value={formatEuro(commSocieteEnCours)}
+            sub="Non encore perçue"
+            icon={<Building2 size={20} />}
+            color="purple"
+          />
+          <KpiCard
+            label="Comm. société totale"
+            value={formatEuro(commSocieteTotale)}
+            sub="Depuis la création"
+            icon={<Wallet size={20} />}
+            color="green"
+          />
+          <KpiCard
+            label="Comm. commerciaux dues"
+            value={formatEuro(commCommerciauxDues)}
+            sub="Reste à payer"
+            icon={<TrendingUp size={20} />}
+            color="orange"
+          />
+          <KpiCard
+            label="Comm. apporteurs dues"
+            value={formatEuro(commApporteursDues)}
+            sub="Reste à payer"
+            icon={<Users size={20} />}
+            color="blue"
+          />
+        </div>
+      )}
+
+      {/* ── KPIs commerciaux ── */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
           label="Commission en cours"
@@ -180,10 +218,8 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-surface-800">Pipeline commercial</h2>
-            <button
-              onClick={() => navigate('/opportunites')}
-              className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1 font-medium"
-            >
+            <button onClick={() => navigate('/opportunites')}
+              className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1 font-medium">
               Voir tout <ArrowRight size={12} />
             </button>
           </div>
@@ -194,10 +230,8 @@ export default function Dashboard() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-surface-500">
                     {col.label.replace(' ✓', '')}
                   </span>
-                  <span
-                    className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center"
-                    style={{ background: col.couleur + '22', color: col.couleur }}
-                  >
+                  <span className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center"
+                    style={{ background: col.couleur + '22', color: col.couleur }}>
                     {col.items.length}
                   </span>
                 </div>
@@ -206,11 +240,8 @@ export default function Dashboard() {
                     const contact = contacts.find(c => c.id === opp.contactId)
                     const produit = produits.find(p => p.id === opp.produitId)
                     return (
-                      <button
-                        key={opp.id}
-                        onClick={() => navigate(`/opportunites/${opp.id}`)}
-                        className="w-full text-left p-2.5 bg-surface-50 hover:bg-surface-100 rounded-lg border border-surface-200 hover:border-surface-300 transition-all hover:shadow-sm"
-                      >
+                      <button key={opp.id} onClick={() => navigate(`/opportunites/${opp.id}`)}
+                        className="w-full text-left p-2.5 bg-surface-50 hover:bg-surface-100 rounded-lg border border-surface-200 hover:border-surface-300 transition-all hover:shadow-sm">
                         <p className="text-xs font-semibold text-surface-800 leading-tight truncate">
                           {contact ? `${contact.civilite ?? ''} ${contact.nom}`.trim() : opp.reference}
                         </p>
@@ -218,9 +249,7 @@ export default function Dashboard() {
                           <p className="text-xs text-surface-600 mt-0.5">{formatEuro(opp.montantDevis)}</p>
                         )}
                         {contact && (
-                          <p className="text-[10px] text-surface-400 truncate">
-                            {contact.prenom} {contact.nom}
-                          </p>
+                          <p className="text-[10px] text-surface-400 truncate">{contact.prenom} {contact.nom}</p>
                         )}
                         {produit && (
                           <div className="mt-1.5">
@@ -234,9 +263,7 @@ export default function Dashboard() {
                     )
                   })}
                   {col.items.length > 3 && (
-                    <p className="text-[10px] text-surface-400 text-center py-1">
-                      +{col.items.length - 3} autres
-                    </p>
+                    <p className="text-[10px] text-surface-400 text-center py-1">+{col.items.length - 3} autres</p>
                   )}
                   {col.items.length === 0 && (
                     <div className="h-16 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center">
@@ -254,44 +281,31 @@ export default function Dashboard() {
 
           {/* Activités récentes */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
-              Activités récentes
-            </h3>
+            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Activités récentes</h3>
             <div className="space-y-1">
               {recentActivites.length === 0 ? (
                 <p className="text-xs text-surface-400 text-center py-6">Aucune activité</p>
-              ) : (
-                recentActivites.map(({ activite, opp, contact }) => (
-                  <button
-                    key={activite.id}
-                    onClick={() => navigate(`/opportunites/${opp.id}`)}
-                    className="w-full flex items-start gap-2.5 text-left hover:bg-surface-50 rounded-lg p-1.5 -mx-1.5 transition-colors"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {ACTIVITE_ICONS[activite.type] ?? <FileText size={11} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-surface-700 truncate">{activite.titre}</p>
-                      {contact && (
-                        <p className="text-[10px] text-surface-400 truncate">
-                          {contact.prenom} {contact.nom}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-surface-400 flex-shrink-0">
-                      {formatRelative(activite.date)}
-                    </span>
-                  </button>
-                ))
-              )}
+              ) : recentActivites.map(({ activite, opp, contact }) => (
+                <button key={activite.id} onClick={() => navigate(`/opportunites/${opp.id}`)}
+                  className="w-full flex items-start gap-2.5 text-left hover:bg-surface-50 rounded-lg p-1.5 -mx-1.5 transition-colors">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {ACTIVITE_ICONS[activite.type] ?? <FileText size={11} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-surface-700 truncate">{activite.titre}</p>
+                    {contact && (
+                      <p className="text-[10px] text-surface-400 truncate">{contact.prenom} {contact.nom}</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-surface-400 flex-shrink-0">{formatRelative(activite.date)}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Top produits — camembert */}
+          {/* Top produits camembert */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">
-              Top produits
-            </h3>
+            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Top produits</h3>
             {topProduits.length === 0 ? (
               <p className="text-xs text-surface-400 text-center py-2">Aucune donnée</p>
             ) : (
@@ -300,10 +314,7 @@ export default function Dashboard() {
                   {topProduits.map(({ produit, pct }, i) => (
                     <div key={produit!.id} className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                          style={{ background: PIE_COLORS[i] }}
-                        />
+                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PIE_COLORS[i] }} />
                         <span className="text-xs text-surface-700 truncate">
                           {truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 18)}
                         </span>
@@ -313,22 +324,13 @@ export default function Dashboard() {
                   ))}
                 </div>
                 <div className="h-[160px] flex items-center justify-center">
-                  <Doughnut
-                    data={pieData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      cutout: '55%',
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            label: ctx => ` ${ctx.label} : ${ctx.parsed}%`,
-                          },
-                        },
-                      },
-                    }}
-                  />
+                  <Doughnut data={pieData} options={{
+                    responsive: true, maintainAspectRatio: false, cutout: '55%',
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: { callbacks: { label: ctx => ` ${ctx.label} : ${ctx.parsed}%` } },
+                    },
+                  }} />
                 </div>
               </>
             )}
@@ -340,23 +342,20 @@ export default function Dashboard() {
   )
 }
 
-/* ── Composant KPI Card ── */
+/* ── KPI Card ── */
 function KpiCard({
   label, value, sub, trend, trendUp, icon, color,
 }: {
-  label: string
-  value: string
-  sub?: string
-  trend?: string
-  trendUp?: boolean
-  icon: React.ReactNode
-  color: 'green' | 'orange' | 'blue' | 'red'
+  label: string; value: string; sub?: string; trend?: string
+  trendUp?: boolean; icon: React.ReactNode
+  color: 'green' | 'orange' | 'blue' | 'red' | 'purple'
 }) {
   const palette = {
     green:  { bg: 'bg-green-50',  icon: 'text-green-600',  border: 'border-green-100' },
     orange: { bg: 'bg-orange-50', icon: 'text-orange-500', border: 'border-orange-100' },
     blue:   { bg: 'bg-blue-50',   icon: 'text-blue-600',   border: 'border-blue-100' },
     red:    { bg: 'bg-red-50',    icon: 'text-red-500',    border: 'border-red-100' },
+    purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-100' },
   }[color]
 
   return (
