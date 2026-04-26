@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, Mail, MapPin, Plus, Save, ChevronRight, Edit2, Calendar } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, MapPin, Plus, Save, ChevronRight, Edit2, Calendar, Wrench, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOpportunitesStore } from '@/store/opportunitesStore'
 import { useContactsStore } from '@/store/contactsStore'
 import { useProduitsStore } from '@/store/produitsStore'
+import { useInstallateursStore } from '@/store/installateurStore'
 import { formatDate, formatEuro, formatRelative } from '@/utils/formatters'
 import Badge, {
   FAMILLE_LABELS, FAMILLE_COLORS,
@@ -18,7 +19,6 @@ const ACTIVITE_ICONS: Record<string, string> = {
   signature: '✅', installation: '🔧', note: '📝',
 }
 
-// Convertit une date ISO en format datetime-local (YYYY-MM-DDTHH:mm)
 function toInputValue(iso?: string) {
   if (!iso) return ''
   return iso.slice(0, 16)
@@ -32,13 +32,15 @@ export default function OpportuniteDetail() {
     opportunites, updateOpportunite, moveEtape, addActivite,
     updateCommission, payerCommission, fetchOpportunites,
   } = useOpportunitesStore()
-  const { contacts, fetchContacts } = useContactsStore()
-  const { produits } = useProduitsStore()
+  const { contacts, fetchContacts }         = useContactsStore()
+  const { produits }                        = useProduitsStore()
+  const { installateurs, fetchInstallateurs } = useInstallateursStore()
 
   const [newActivite, setNewActivite]       = useState({ type: 'note' as Activite['type'], titre: '' })
   const [showForm, setShowForm]             = useState(false)
   const [editCommission, setEditCommission] = useState(false)
   const [editDates, setEditDates]           = useState(false)
+  const [editInstallateurs, setEditInstallateurs] = useState(false)
   const [commissionForm, setCommissionForm] = useState({
     montantSociete: 0, montantCommercial: 0, montantApporteur: 0,
   })
@@ -46,10 +48,12 @@ export default function OpportuniteDetail() {
     dateRdv: '', dateDevis: '', dateSignature: '',
     dateInstallation: '', dateRelance: '', datePaiementPartenaire: '',
   })
+  const [installateurIds, setInstallateurIds] = useState<string[]>([])
 
   useEffect(() => {
     fetchOpportunites()
     fetchContacts()
+    fetchInstallateurs()
   }, [])
 
   const opp = opportunites.find(o => o.id === id)
@@ -67,13 +71,14 @@ export default function OpportuniteDetail() {
   useEffect(() => {
     if (opp) {
       setDatesForm({
-        dateRdv:                 toInputValue(opp.dateRdv),
-        dateDevis:               toInputValue(opp.dateDevis),
-        dateSignature:           toInputValue(opp.dateSignature),
-        dateInstallation:        toInputValue(opp.dateInstallation),
-        dateRelance:             toInputValue(opp.dateRelance),
-        datePaiementPartenaire:  toInputValue(opp.datePaiementPartenaire),
+        dateRdv:                toInputValue(opp.dateRdv),
+        dateDevis:              toInputValue(opp.dateDevis),
+        dateSignature:          toInputValue(opp.dateSignature),
+        dateInstallation:       toInputValue(opp.dateInstallation),
+        dateRelance:            toInputValue(opp.dateRelance),
+        datePaiementPartenaire: toInputValue(opp.datePaiementPartenaire),
       })
+      setInstallateurIds(opp.installateurIds ?? [])
     }
   }, [opp?.id])
 
@@ -93,6 +98,11 @@ export default function OpportuniteDetail() {
   const commPaid = opp.commissionPayee ?? 0
   const commLeft = Math.max(0, commDue - commPaid)
 
+  // Installateurs liés à cette opportunité
+  const installateursDuDossier = installateurs.filter(i =>
+    (opp.installateurIds ?? []).includes(i.id)
+  )
+
   function handleMoveEtape(etape: EtapePipeline) {
     moveEtape(opp!.id, etape)
   }
@@ -110,14 +120,25 @@ export default function OpportuniteDetail() {
 
   async function handleSaveDates() {
     await updateOpportunite(opp!.id, {
-      dateRdv:                datesForm.dateRdv        ? new Date(datesForm.dateRdv).toISOString()        : undefined,
-      dateDevis:              datesForm.dateDevis       ? new Date(datesForm.dateDevis).toISOString()       : undefined,
-      dateSignature:          datesForm.dateSignature   ? new Date(datesForm.dateSignature).toISOString()   : undefined,
-      dateInstallation:       datesForm.dateInstallation ? new Date(datesForm.dateInstallation).toISOString() : undefined,
-      dateRelance:            datesForm.dateRelance      ? new Date(datesForm.dateRelance).toISOString()      : undefined,
-      datePaiementPartenaire: datesForm.datePaiementPartenaire ? new Date(datesForm.datePaiementPartenaire).toISOString() : undefined,
+      dateRdv:                datesForm.dateRdv                ? new Date(datesForm.dateRdv).toISOString()                : undefined,
+      dateDevis:              datesForm.dateDevis               ? new Date(datesForm.dateDevis).toISOString()               : undefined,
+      dateSignature:          datesForm.dateSignature           ? new Date(datesForm.dateSignature).toISOString()           : undefined,
+      dateInstallation:       datesForm.dateInstallation        ? new Date(datesForm.dateInstallation).toISOString()        : undefined,
+      dateRelance:            datesForm.dateRelance             ? new Date(datesForm.dateRelance).toISOString()             : undefined,
+      datePaiementPartenaire: datesForm.datePaiementPartenaire  ? new Date(datesForm.datePaiementPartenaire).toISOString()  : undefined,
     })
     setEditDates(false)
+  }
+
+  async function handleSaveInstallateurs() {
+    await updateOpportunite(opp!.id, { installateurIds })
+    setEditInstallateurs(false)
+  }
+
+  function toggleInstallateur(instId: string) {
+    setInstallateurIds(ids =>
+      ids.includes(instId) ? ids.filter(i => i !== instId) : [...ids, instId]
+    )
   }
 
   return (
@@ -359,6 +380,81 @@ export default function OpportuniteDetail() {
             </div>
           )}
 
+          {/* ── Installateurs ── */}
+          <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display font-semibold text-surface-800 text-sm flex items-center gap-1.5">
+                <Wrench size={13} className="text-surface-400" /> Installateurs
+              </h3>
+              {can('opportunites.edit') && !editInstallateurs && (
+                <button onClick={() => setEditInstallateurs(true)}
+                  className="flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium">
+                  <Edit2 size={11} /> Modifier
+                </button>
+              )}
+            </div>
+
+            {editInstallateurs ? (
+              <div className="space-y-2">
+                {/* Sélecteur multi-installateurs */}
+                <div className="max-h-48 overflow-y-auto space-y-1 border border-surface-200 rounded-lg p-2">
+                  {installateurs.filter(i => i.actif).length === 0 ? (
+                    <p className="text-xs text-surface-400 text-center py-3">Aucun installateur disponible</p>
+                  ) : installateurs.filter(i => i.actif).map(inst => (
+                    <button
+                      key={inst.id}
+                      onClick={() => toggleInstallateur(inst.id)}
+                      className={clsx(
+                        'w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2',
+                        installateurIds.includes(inst.id)
+                          ? 'bg-brand-50 border border-brand-200 text-brand-700'
+                          : 'hover:bg-surface-50 border border-transparent text-surface-700'
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{inst.raisonSociale}</p>
+                        <p className="text-[10px] text-surface-400">{inst.adresse.ville}</p>
+                      </div>
+                      {installateurIds.includes(inst.id) && (
+                        <X size={12} className="text-brand-500 flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => { setEditInstallateurs(false); setInstallateurIds(opp.installateurIds ?? []) }}
+                    className="flex-1 py-2 rounded-lg border border-surface-200 text-xs font-medium text-surface-600 hover:bg-surface-50 transition-colors">
+                    Annuler
+                  </button>
+                  <button onClick={handleSaveInstallateurs}
+                    className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {installateursDuDossier.length === 0 ? (
+                  <p className="text-[10px] text-surface-400 text-center py-3">Aucun installateur assigné</p>
+                ) : installateursDuDossier.map(inst => (
+                  <div key={inst.id} className="flex items-center gap-2.5 p-2 rounded-lg bg-surface-50 border border-surface-100">
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                      <Wrench size={12} className="text-teal-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Admin voit le nom complet, les autres aussi mais sans détails de contact */}
+                      <p className="text-xs font-semibold text-surface-800 truncate">{inst.raisonSociale}</p>
+                      {can('installateurs.view') && (
+                        <p className="text-[10px] text-surface-400 truncate">{inst.adresse.ville}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Commissions */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <div className="flex items-center justify-between mb-3">
@@ -474,7 +570,7 @@ export default function OpportuniteDetail() {
             )}
           </div>
 
-          {/* ── Dates clés — éditable ── */}
+          {/* Dates clés */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-display font-semibold text-surface-800 text-sm flex items-center gap-1.5">
@@ -487,21 +583,18 @@ export default function OpportuniteDetail() {
                 </button>
               )}
             </div>
-
             {editDates ? (
               <div className="space-y-2.5">
                 {[
-                  { label: 'RDV',                    key: 'dateRdv' },
-                  { label: 'Devis envoyé',            key: 'dateDevis' },
-                  { label: 'Signature',               key: 'dateSignature' },
-                  { label: 'Installation',            key: 'dateInstallation' },
-                  { label: 'Relance',                 key: 'dateRelance' },
+                  { label: 'RDV',              key: 'dateRdv' },
+                  { label: 'Devis envoyé',     key: 'dateDevis' },
+                  { label: 'Signature',        key: 'dateSignature' },
+                  { label: 'Installation',     key: 'dateInstallation' },
+                  { label: 'Relance',          key: 'dateRelance' },
                   ...(can('opportunites.view_all') ? [{ label: 'Paiement partenaire', key: 'datePaiementPartenaire' }] : []),
                 ].map(({ label, key }) => (
                   <div key={key}>
-                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
-                      {label}
-                    </label>
+                    <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">{label}</label>
                     <input
                       type="datetime-local"
                       value={datesForm[key as keyof typeof datesForm]}
@@ -524,12 +617,12 @@ export default function OpportuniteDetail() {
             ) : (
               <div className="space-y-2">
                 {[
-                  { label: 'Création',             date: opp.dateCreation },
-                  { label: 'RDV',                  date: opp.dateRdv },
-                  { label: 'Devis envoyé',          date: opp.dateDevis },
-                  { label: 'Signature',             date: opp.dateSignature },
-                  { label: 'Installation',          date: opp.dateInstallation },
-                  { label: 'Relance',               date: opp.dateRelance },
+                  { label: 'Création',         date: opp.dateCreation },
+                  { label: 'RDV',              date: opp.dateRdv },
+                  { label: 'Devis envoyé',     date: opp.dateDevis },
+                  { label: 'Signature',        date: opp.dateSignature },
+                  { label: 'Installation',     date: opp.dateInstallation },
+                  { label: 'Relance',          date: opp.dateRelance },
                   ...(can('opportunites.view_all') ? [{ label: 'Paiement partenaire', date: opp.datePaiementPartenaire }] : []),
                 ].filter(d => d.date).map(d => (
                   <div key={d.label} className="flex items-center justify-between">
