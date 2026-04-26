@@ -14,6 +14,7 @@ function mapRow(row: any): Opportunite {
     montantAidesCEE: row.montant_aides_cee,
     montantNet: row.montant_net,
     installateurId: row.installateur_id,
+    installateurIds: row.installateur_ids ?? [],
     commercialId: row.commercial_id,
     apporteurId: row.apporteur_id,
     regieId: row.regie_id,
@@ -22,16 +23,16 @@ function mapRow(row: any): Opportunite {
       montantCommercial: row.commission_commercial,
       montantApporteur:  row.commission_apporteur,
     },
-    commissionPayee: row.commission_payee ?? 0, 
-    dateCreation:     row.date_creation,
-    dateRdv:          row.date_rdv,
-    dateDevis:        row.date_devis,
-    dateSignature:    row.date_signature,
-    dateInstallation: row.date_installation,
+    commissionPayee:        row.commission_payee ?? 0,
+    dateCreation:           row.date_creation,
+    dateRdv:                row.date_rdv,
+    dateDevis:              row.date_devis,
+    dateSignature:          row.date_signature,
+    dateInstallation:       row.date_installation,
+    dateRelance:            row.date_relance,
+    datePaiementPartenaire: row.date_paiement_partenaire,
     dossierMPR: row.dossier_mpr,
     dossierCEE: row.dossier_cee,
-    dateRelance:             row.date_relance,
-    datePaiementPartenaire:  row.date_paiement_partenaire,
     activites:  row.activites ?? [],
     notes:      row.notes,
     updatedAt:  row.updated_at,
@@ -83,6 +84,7 @@ export const useOpportunitesStore = create<OpportunitesStore>()((set, get) => ({
         montant_aides_cee:     payload.montantAidesCEE,
         montant_net:           payload.montantNet,
         installateur_id:       payload.installateurId || null,
+        installateur_ids:      payload.installateurIds ?? [],
         commercial_id:         payload.commercialId,
         apporteur_id:          payload.apporteurId || null,
         regie_id:              payload.regieId || null,
@@ -94,6 +96,8 @@ export const useOpportunitesStore = create<OpportunitesStore>()((set, get) => ({
         date_devis:            payload.dateDevis,
         date_signature:        payload.dateSignature,
         date_installation:     payload.dateInstallation,
+        date_relance:          payload.dateRelance,
+        date_paiement_partenaire: payload.datePaiementPartenaire,
         dossier_mpr:           payload.dossierMPR ?? null,
         dossier_cee:           payload.dossierCEE ?? null,
         activites:             payload.activites ?? [],
@@ -115,22 +119,25 @@ export const useOpportunitesStore = create<OpportunitesStore>()((set, get) => ({
     const { data, error } = await supabase
       .from('opportunites')
       .update({
-        etape:             payload.etape,
-        montant_devis:     payload.montantDevis,
-        montant_aides_mpr: payload.montantAidesMPR,
-        montant_aides_cee: payload.montantAidesCEE,
-        montant_net:       payload.montantNet,
-        installateur_id:   payload.installateurId,
-        apporteur_id:      payload.apporteurId,
-        dossier_mpr:       payload.dossierMPR,
-        dossier_cee:       payload.dossierCEE,
-        activites:         payload.activites,
-        notes:             payload.notes,
-        date_rdv:          payload.dateRdv,
-        date_devis:        payload.dateDevis,
-        date_signature:    payload.dateSignature,
-        date_installation: payload.dateInstallation,
-        updated_at:        new Date().toISOString(),
+        etape:                    payload.etape,
+        montant_devis:            payload.montantDevis,
+        montant_aides_mpr:        payload.montantAidesMPR,
+        montant_aides_cee:        payload.montantAidesCEE,
+        montant_net:              payload.montantNet,
+        installateur_id:          payload.installateurId,
+        installateur_ids:         payload.installateurIds,
+        apporteur_id:             payload.apporteurId,
+        dossier_mpr:              payload.dossierMPR,
+        dossier_cee:              payload.dossierCEE,
+        activites:                payload.activites,
+        notes:                    payload.notes,
+        date_rdv:                 payload.dateRdv,
+        date_devis:               payload.dateDevis,
+        date_signature:           payload.dateSignature,
+        date_installation:        payload.dateInstallation,
+        date_relance:             payload.dateRelance,
+        date_paiement_partenaire: payload.datePaiementPartenaire,
+        updated_at:               new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -160,10 +167,7 @@ export const useOpportunitesStore = create<OpportunitesStore>()((set, get) => ({
   payerCommission: async (id, montant) => {
     const { data, error } = await supabase
       .from('opportunites')
-      .update({
-        commission_payee: montant,
-        updated_at:       new Date().toISOString(),
-      })
+      .update({ commission_payee: montant, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Star, MapPin, Phone, Mail, Wrench, Calendar, CheckCircle, Plus, X } from 'lucide-react'
+import { Search, Star, MapPin, Phone, Mail, Wrench, Calendar, CheckCircle, Plus, X, Shield } from 'lucide-react'
 import { useInstallateursStore } from '@/store/installateurStore'
 import { useProduitsStore } from '@/store/produitsStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,12 +10,8 @@ import type { ZoneIntervention } from '@/types/installateur'
 import clsx from 'clsx'
 
 const ZONE_LABELS: Record<ZoneIntervention, string> = {
-  H1: 'Zone H1',
-  H2: 'Zone H2',
-  H3: 'Zone H3',
-  france_entiere: 'France entière',
+  H1: 'Zone H1', H2: 'Zone H2', H3: 'Zone H3', france_entiere: 'France entière',
 }
-
 const ZONES: ZoneIntervention[] = ['H1', 'H2', 'H3', 'france_entiere']
 
 const STATUT_CHANTIER_COLORS: Record<string, string> = {
@@ -26,24 +22,18 @@ const STATUT_CHANTIER_LABELS: Record<string, string> = {
 }
 
 const EMPTY_FORM = {
-  raisonSociale: '',
-  siret: '',
-  contactNom: '',
-  contactPrenom: '',
-  contactEmail: '',
-  contactTelephone: '',
-  adresseRue: '',
-  adresseCodePostal: '',
-  adresseVille: '',
+  raisonSociale: '', siret: '', contactNom: '', contactPrenom: '',
+  contactEmail: '', contactTelephone: '', adresseRue: '',
+  adresseCodePostal: '', adresseVille: '',
   zonesIntervention: [] as ZoneIntervention[],
-  certifications: '',
-  notes: '',
+  certifications: '', notes: '',
 }
 
 export default function Installateurs() {
   const { installateurs, isLoading, fetchInstallateurs, addInstallateur } = useInstallateursStore()
   const { produits } = useProduitsStore()
-  const { can } = useAuth()
+  const { can }      = useAuth()
+
   const [search,    setSearch]    = useState('')
   const [selected,  setSelected]  = useState<string | null>(null)
   const [onglet,    setOnglet]    = useState<'infos' | 'chantiers'>('infos')
@@ -52,6 +42,17 @@ export default function Installateurs() {
   const [saving,    setSaving]    = useState(false)
 
   useEffect(() => { fetchInstallateurs() }, [])
+
+  /* ── Accès réservé aux admins ── */
+  if (!can('installateurs.view')) {
+    return (
+      <div className="bg-white rounded-xl border border-surface-200 p-12 text-center">
+        <Shield size={32} className="text-surface-300 mx-auto mb-3" />
+        <p className="text-surface-500 font-semibold">Accès réservé aux administrateurs</p>
+        <p className="text-surface-400 text-xs mt-1">Les informations des partenaires installateurs sont confidentielles.</p>
+      </div>
+    )
+  }
 
   const filtered = installateurs.filter(i =>
     i.actif && (!search ||
@@ -77,23 +78,14 @@ export default function Installateurs() {
       raisonSociale: form.raisonSociale,
       siret: form.siret || undefined,
       contact: {
-        nom: form.contactNom,
-        prenom: form.contactPrenom,
-        email: form.contactEmail,
-        telephone: form.contactTelephone,
+        nom: form.contactNom, prenom: form.contactPrenom,
+        email: form.contactEmail, telephone: form.contactTelephone,
       },
-      adresse: {
-        rue: form.adresseRue,
-        codePostal: form.adresseCodePostal,
-        ville: form.adresseVille,
-      },
+      adresse: { rue: form.adresseRue, codePostal: form.adresseCodePostal, ville: form.adresseVille },
       zonesIntervention: form.zonesIntervention,
       produitIds: [],
       certifications: form.certifications ? form.certifications.split(',').map(c => c.trim()).filter(Boolean) : [],
-      note: 0,
-      nombreChantiers: 0,
-      actif: true,
-      notes: form.notes || undefined,
+      note: 0, nombreChantiers: 0, actif: true, notes: form.notes || undefined,
     })
     setSaving(false)
     setShowModal(false)
@@ -102,6 +94,7 @@ export default function Installateurs() {
 
   return (
     <div className="flex gap-5 h-[calc(100vh-8rem)]">
+
       {/* Liste */}
       <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-surface-200 shadow-card flex flex-col overflow-hidden">
         <div className="p-4 border-b border-surface-100 space-y-3">
@@ -110,7 +103,7 @@ export default function Installateurs() {
             <input type="text" placeholder="Rechercher…" value={search} onChange={e => setSearch(e.target.value)}
               className="bg-transparent text-xs text-surface-700 placeholder-surface-400 outline-none w-full" />
           </div>
-          {can('utilisateurs.edit') && (
+          {can('installateurs.edit') && (
             <button onClick={() => setShowModal(true)}
               className="w-full flex items-center justify-center gap-1.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold transition-colors">
               <Plus size={13} /> Ajouter un partenaire
@@ -287,31 +280,26 @@ export default function Installateurs() {
         )}
       </div>
 
-      {/* Modal ajout partenaire */}
+      {/* Modal ajout partenaire installateur */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-surface-100">
-              <h3 className="font-display font-bold text-surface-800">Nouveau partenaire</h3>
+              <h3 className="font-display font-bold text-surface-800">Nouveau partenaire installateur</h3>
               <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM) }}
                 className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-500 transition-colors">
                 <X size={16} />
               </button>
             </div>
-
             <div className="p-5 space-y-4">
-              {/* Raison sociale */}
               <Field label="Raison sociale *">
                 <input value={form.raisonSociale} onChange={e => setForm(f => ({ ...f, raisonSociale: e.target.value }))}
                   placeholder="Ex : IDEHOME" className={inputClass} />
               </Field>
-
               <Field label="SIRET">
                 <input value={form.siret} onChange={e => setForm(f => ({ ...f, siret: e.target.value }))}
                   placeholder="123 456 789 00012" className={inputClass} />
               </Field>
-
-              {/* Contact */}
               <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Contact</p>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Nom *">
@@ -331,8 +319,6 @@ export default function Installateurs() {
                 <input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))}
                   placeholder="contact@partenaire.fr" className={inputClass} />
               </Field>
-
-              {/* Adresse */}
               <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Adresse</p>
               <Field label="Rue">
                 <input value={form.adresseRue} onChange={e => setForm(f => ({ ...f, adresseRue: e.target.value }))}
@@ -348,8 +334,6 @@ export default function Installateurs() {
                     placeholder="Paris" className={inputClass} />
                 </Field>
               </div>
-
-              {/* Zones */}
               <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider pt-1">Zones d'intervention</p>
               <div className="flex flex-wrap gap-2">
                 {ZONES.map(z => (
@@ -362,21 +346,16 @@ export default function Installateurs() {
                   </button>
                 ))}
               </div>
-
-              {/* Certifications */}
               <Field label="Certifications (séparées par des virgules)">
                 <input value={form.certifications} onChange={e => setForm(f => ({ ...f, certifications: e.target.value }))}
                   placeholder="RGE QualiPAC, RGE QualiPV" className={inputClass} />
               </Field>
-
-              {/* Notes */}
               <Field label="Notes internes">
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="Informations complémentaires…" rows={3}
                   className={clsx(inputClass, 'resize-none')} />
               </Field>
             </div>
-
             <div className="flex gap-3 p-5 border-t border-surface-100">
               <button onClick={() => { setShowModal(false); setForm(EMPTY_FORM) }}
                 className="flex-1 py-2.5 rounded-lg border border-surface-200 text-xs font-semibold text-surface-600 hover:bg-surface-50 transition-colors">
