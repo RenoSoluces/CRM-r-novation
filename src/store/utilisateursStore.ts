@@ -20,13 +20,13 @@ function mapRow(row: any): User {
 interface UtilisateursStore {
   utilisateurs: User[]
   isLoading: boolean
-  fetchUtilisateurs:  () => Promise<void>
-  createApporteur:    (payload: {
-    prenom: string
-    nom: string
-    email: string
-    telephone?: string
-    password: string
+  fetchUtilisateurs:       () => Promise<void>
+  createApporteur:         (payload: {
+    prenom: string; nom: string; email: string
+    telephone?: string; password: string
+  }) => Promise<{ success: boolean; error?: string }>
+  createAncienCommercial:  (payload: {
+    prenom: string; nom: string; telephone?: string; notes?: string
   }) => Promise<{ success: boolean; error?: string }>
 }
 
@@ -45,7 +45,6 @@ export const useUtilisateursStore = create<UtilisateursStore>()((set) => ({
   },
 
   createApporteur: async ({ prenom, nom, email, telephone, password }) => {
-    // 1. Créer le compte auth Supabase
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -54,24 +53,41 @@ export const useUtilisateursStore = create<UtilisateursStore>()((set) => ({
     })
     if (authError) return { success: false, error: authError.message }
 
-    // 2. Créer le profil dans la table profiles
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert({
-        id:        authData.user.id,
-        prenom,
-        nom,
-        email,
+        id: authData.user.id,
+        prenom, nom, email,
         telephone: telephone || null,
-        role:      'apporteur',
-        actif:     true,
+        role: 'apporteur',
+        actif: true,
       })
       .select()
       .single()
 
     if (profileError) return { success: false, error: profileError.message }
-
     set(s => ({ utilisateurs: [...s.utilisateurs, mapRow(profileData)] }))
+    return { success: true }
+  },
+
+  createAncienCommercial: async ({ prenom, nom, telephone, notes }) => {
+    // Pas de compte auth — insertion directe dans profiles avec un UUID généré
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({
+        prenom,
+        nom,
+        email:     null,
+        telephone: telephone || null,
+        role:      'commercial',
+        actif:     false,   // ← inactif = pas d'accès
+        notes:     notes || null,
+      })
+      .select()
+      .single()
+
+    if (error) return { success: false, error: error.message }
+    set(s => ({ utilisateurs: [...s.utilisateurs, mapRow(data)] }))
     return { success: true }
   },
 }))

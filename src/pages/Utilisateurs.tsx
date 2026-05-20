@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Shield, Users, Check, X, Edit2, UserPlus, Eye, EyeOff } from 'lucide-react'
+import { Shield, Users, Check, X, UserPlus, Eye, EyeOff, History } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useUtilisateursStore } from '@/store/utilisateursStore'
 import { formatDate, getInitiales } from '@/utils/formatters'
@@ -39,17 +39,25 @@ const EMPTY_APPORTEUR_FORM = {
   prenom: '', nom: '', email: '', telephone: '', password: '', confirmPassword: '',
 }
 
+const EMPTY_ANCIEN_FORM = {
+  prenom: '', nom: '', telephone: '', notes: '',
+}
+
 export default function Utilisateurs() {
   const { user: currentUser, can } = useAuth()
-  const { utilisateurs, isLoading, fetchUtilisateurs, createApporteur } = useUtilisateursStore()
+  const { utilisateurs, isLoading, fetchUtilisateurs, createApporteur, createAncienCommercial } = useUtilisateursStore()
 
-  const [selected,       setSelected]       = useState<User | null>(null)
-  const [onglet,         setOnglet]         = useState<'liste' | 'permissions'>('liste')
-  const [showModal,      setShowModal]      = useState(false)
-  const [showPassword,   setShowPassword]   = useState(false)
-  const [saving,         setSaving]         = useState(false)
-  const [saveResult,     setSaveResult]     = useState<{ success: boolean; message: string } | null>(null)
-  const [form,           setForm]           = useState(EMPTY_APPORTEUR_FORM)
+  const [selected,          setSelected]          = useState<User | null>(null)
+  const [onglet,            setOnglet]            = useState<'liste' | 'permissions'>('liste')
+  const [showApporteur,     setShowApporteur]     = useState(false)
+  const [showAncien,        setShowAncien]        = useState(false)
+  const [showPassword,      setShowPassword]      = useState(false)
+  const [savingApporteur,   setSavingApporteur]   = useState(false)
+  const [savingAncien,      setSavingAncien]      = useState(false)
+  const [resultApporteur,   setResultApporteur]   = useState<{ success: boolean; message: string } | null>(null)
+  const [resultAncien,      setResultAncien]      = useState<{ success: boolean; message: string } | null>(null)
+  const [formApporteur,     setFormApporteur]     = useState(EMPTY_APPORTEUR_FORM)
+  const [formAncien,        setFormAncien]        = useState(EMPTY_ANCIEN_FORM)
 
   useEffect(() => { fetchUtilisateurs() }, [])
 
@@ -62,37 +70,60 @@ export default function Utilisateurs() {
     )
   }
 
+  /* ── Séparer actifs / inactifs ── */
+  const utilisateursActifs   = utilisateurs.filter(u => u.actif)
+  const utilisateursInactifs = utilisateurs.filter(u => !u.actif)
+
   async function handleCreateApporteur() {
-    if (!form.prenom || !form.nom || !form.email || !form.password) return
-    if (form.password !== form.confirmPassword) {
-      setSaveResult({ success: false, message: 'Les mots de passe ne correspondent pas.' })
+    if (!formApporteur.prenom || !formApporteur.nom || !formApporteur.email || !formApporteur.password) return
+    if (formApporteur.password !== formApporteur.confirmPassword) {
+      setResultApporteur({ success: false, message: 'Les mots de passe ne correspondent pas.' })
       return
     }
-    if (form.password.length < 8) {
-      setSaveResult({ success: false, message: 'Le mot de passe doit faire au moins 8 caractères.' })
+    if (formApporteur.password.length < 8) {
+      setResultApporteur({ success: false, message: 'Le mot de passe doit faire au moins 8 caractères.' })
       return
     }
-    setSaving(true)
-    setSaveResult(null)
+    setSavingApporteur(true)
+    setResultApporteur(null)
     const result = await createApporteur({
-      prenom: form.prenom, nom: form.nom,
-      email: form.email, telephone: form.telephone || undefined,
-      password: form.password,
+      prenom: formApporteur.prenom, nom: formApporteur.nom,
+      email: formApporteur.email, telephone: formApporteur.telephone || undefined,
+      password: formApporteur.password,
     })
-    setSaving(false)
+    setSavingApporteur(false)
     if (result.success) {
-      setSaveResult({ success: true, message: 'Compte apporteur créé avec succès !' })
-      setForm(EMPTY_APPORTEUR_FORM)
-      setTimeout(() => { setShowModal(false); setSaveResult(null) }, 1500)
+      setResultApporteur({ success: true, message: 'Compte apporteur créé !' })
+      setFormApporteur(EMPTY_APPORTEUR_FORM)
+      setTimeout(() => { setShowApporteur(false); setResultApporteur(null) }, 1500)
     } else {
-      setSaveResult({ success: false, message: result.error ?? 'Erreur lors de la création.' })
+      setResultApporteur({ success: false, message: result.error ?? 'Erreur lors de la création.' })
+    }
+  }
+
+  async function handleCreateAncien() {
+    if (!formAncien.prenom || !formAncien.nom) return
+    setSavingAncien(true)
+    setResultAncien(null)
+    const result = await createAncienCommercial({
+      prenom: formAncien.prenom, nom: formAncien.nom,
+      telephone: formAncien.telephone || undefined,
+      notes: formAncien.notes || undefined,
+    })
+    setSavingAncien(false)
+    if (result.success) {
+      setResultAncien({ success: true, message: 'Ancien commercial ajouté à l\'historique !' })
+      setFormAncien(EMPTY_ANCIEN_FORM)
+      setTimeout(() => { setShowAncien(false); setResultAncien(null) }, 1500)
+    } else {
+      setResultAncien({ success: false, message: result.error ?? 'Erreur lors de la création.' })
     }
   }
 
   return (
     <div className="space-y-5">
 
-      {/* Onglets + bouton créer apporteur */}
+      {/* Onglets + boutons */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           {(['liste', 'permissions'] as const).map(o => (
@@ -100,83 +131,134 @@ export default function Utilisateurs() {
               className={clsx('px-4 py-2 rounded-lg text-xs font-semibold transition-colors',
                 onglet === o ? 'bg-brand-600 text-white' : 'bg-white border border-surface-200 text-surface-600 hover:bg-surface-50')}>
               {o === 'liste'
-                ? isLoading ? 'Utilisateurs…' : `Utilisateurs (${utilisateurs.length})`
+                ? isLoading ? 'Utilisateurs…' : `Utilisateurs (${utilisateursActifs.length})`
                 : 'Matrice des permissions'}
             </button>
           ))}
         </div>
         {can('utilisateurs.edit') && (
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors">
-            <UserPlus size={13} /> Créer un compte apporteur
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowAncien(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-surface-600 hover:bg-surface-700 text-white rounded-lg text-xs font-semibold transition-colors">
+              <History size={13} /> Ancien commercial
+            </button>
+            <button onClick={() => setShowApporteur(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold transition-colors">
+              <UserPlus size={13} /> Créer un compte apporteur
+            </button>
+          </div>
         )}
       </div>
 
       {/* Liste */}
       {onglet === 'liste' && (
         <div className="grid grid-cols-[1fr_400px] gap-5">
-          <div className="bg-white rounded-xl border border-surface-200 shadow-card overflow-hidden">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <p className="text-xs text-surface-400">Chargement…</p>
+          <div className="space-y-4">
+
+            {/* Utilisateurs actifs */}
+            <div className="bg-white rounded-xl border border-surface-200 shadow-card overflow-hidden">
+              <div className="px-4 py-3 border-b border-surface-100 bg-surface-50">
+                <p className="text-xs font-bold text-surface-600 uppercase tracking-wider">
+                  Actifs ({utilisateursActifs.length})
+                </p>
               </div>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-surface-100 bg-surface-50">
-                    {['Utilisateur', 'Rôle', 'Email', 'Statut', 'Créé le', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-[10px] font-bold text-surface-500 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-50">
-                  {utilisateurs.map(u => (
-                    <tr key={u.id} onClick={() => setSelected(u)}
-                      className={clsx('cursor-pointer transition-colors',
-                        selected?.id === u.id ? 'bg-brand-50' : 'hover:bg-surface-50')}>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
-                            {getInitiales(u.prenom, u.nom)}
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold text-surface-800">{u.prenom} {u.nom}</p>
-                            {u.id === currentUser?.id && (
-                              <span className="text-[9px] bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full font-bold">Vous</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className={clsx('text-[10px] px-2 py-1 rounded-full font-bold', ROLE_COLORS[u.role])}>
-                          {ROLE_LABELS[u.role]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-surface-600">{u.email}</td>
-                      <td className="px-4 py-3.5">
-                        <span className={clsx('flex items-center gap-1 text-[10px] font-bold',
-                          u.actif ? 'text-green-600' : 'text-surface-400')}>
-                          {u.actif ? <Check size={11} /> : <X size={11} />}
-                          {u.actif ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-surface-400">{formatDate(u.createdAt)}</td>
-                      <td className="px-4 py-3.5">
-                        {can('utilisateurs.edit') && u.id !== currentUser?.id && (
-                          <button className="text-[10px] px-2 py-1 rounded-lg bg-surface-100 hover:bg-brand-100 text-surface-600 hover:text-brand-600 transition-colors font-medium">
-                            Voir
-                          </button>
-                        )}
-                      </td>
+              {isLoading ? (
+                <div className="flex items-center justify-center h-20">
+                  <p className="text-xs text-surface-400">Chargement…</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-surface-100">
+                      {['Utilisateur', 'Rôle', 'Email', 'Créé le', ''].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[10px] font-bold text-surface-500 uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-surface-50">
+                    {utilisateursActifs.map(u => (
+                      <tr key={u.id} onClick={() => setSelected(u)}
+                        className={clsx('cursor-pointer transition-colors',
+                          selected?.id === u.id ? 'bg-brand-50' : 'hover:bg-surface-50')}>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
+                              {getInitiales(u.prenom, u.nom)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-surface-800">{u.prenom} {u.nom}</p>
+                              {u.id === currentUser?.id && (
+                                <span className="text-[9px] bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full font-bold">Vous</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={clsx('text-[10px] px-2 py-1 rounded-full font-bold', ROLE_COLORS[u.role])}>
+                            {ROLE_LABELS[u.role]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-surface-600">{u.email ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-xs text-surface-400">{formatDate(u.createdAt)}</td>
+                        <td className="px-4 py-3.5">
+                          {can('utilisateurs.edit') && u.id !== currentUser?.id && (
+                            <button className="text-[10px] px-2 py-1 rounded-lg bg-surface-100 hover:bg-brand-100 text-surface-600 hover:text-brand-600 transition-colors font-medium">
+                              Voir
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Anciens commerciaux */}
+            {utilisateursInactifs.length > 0 && (
+              <div className="bg-white rounded-xl border border-surface-200 shadow-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-surface-100 bg-surface-50">
+                  <p className="text-xs font-bold text-surface-500 uppercase tracking-wider flex items-center gap-2">
+                    <History size={12} /> Anciens commerciaux ({utilisateursInactifs.length})
+                  </p>
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-surface-100">
+                      {['Nom', 'Rôle', 'Téléphone', 'Ajouté le'].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[10px] font-bold text-surface-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-50">
+                    {utilisateursInactifs.map(u => (
+                      <tr key={u.id} onClick={() => setSelected(u)}
+                        className={clsx('cursor-pointer transition-colors opacity-70',
+                          selected?.id === u.id ? 'bg-surface-100' : 'hover:bg-surface-50')}>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-surface-300 flex items-center justify-center text-white text-xs font-bold">
+                              {getInitiales(u.prenom, u.nom)}
+                            </div>
+                            <p className="text-xs font-semibold text-surface-600">{u.prenom} {u.nom}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={clsx('text-[10px] px-2 py-1 rounded-full font-bold opacity-60', ROLE_COLORS[u.role])}>
+                            {ROLE_LABELS[u.role]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-surface-500">{u.telephone ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-xs text-surface-400">{formatDate(u.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
-          {/* Détail utilisateur */}
+          {/* Détail */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
             {!selected ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-10">
@@ -186,34 +268,44 @@ export default function Utilisateurs() {
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-lg">
+                  <div className={clsx('w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg',
+                    selected.actif ? 'bg-brand-600' : 'bg-surface-400')}>
                     {getInitiales(selected.prenom, selected.nom)}
                   </div>
                   <div>
                     <p className="font-display font-bold text-surface-800">{selected.prenom} {selected.nom}</p>
-                    <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-bold', ROLE_COLORS[selected.role])}>
-                      {ROLE_LABELS[selected.role]}
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-bold', ROLE_COLORS[selected.role])}>
+                        {ROLE_LABELS[selected.role]}
+                      </span>
+                      {!selected.actif && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-surface-100 text-surface-500">
+                          Ancien — sans accès
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2 text-xs text-surface-600">
-                  <p><span className="text-surface-400">Email :</span> {selected.email}</p>
+                  {selected.email && <p><span className="text-surface-400">Email :</span> {selected.email}</p>}
                   {selected.telephone && <p><span className="text-surface-400">Tél :</span> {selected.telephone}</p>}
-                  <p><span className="text-surface-400">Créé le :</span> {formatDate(selected.createdAt)}</p>
+                  <p><span className="text-surface-400">Ajouté le :</span> {formatDate(selected.createdAt)}</p>
                 </div>
-                <div className="pt-3 border-t border-surface-100">
-                  <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-2">Permissions du rôle</p>
-                  <div className="space-y-1">
-                    {Object.entries(PERMISSIONS).filter(([, roles]) =>
-                      (roles as UserRole[]).includes(selected.role)
-                    ).slice(0, 12).map(([perm]) => (
-                      <div key={perm} className="flex items-center gap-2">
-                        <Check size={11} className="text-green-500 flex-shrink-0" />
-                        <span className="text-[10px] text-surface-600">{perm}</span>
-                      </div>
-                    ))}
+                {selected.actif && (
+                  <div className="pt-3 border-t border-surface-100">
+                    <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-2">Permissions du rôle</p>
+                    <div className="space-y-1">
+                      {Object.entries(PERMISSIONS).filter(([, roles]) =>
+                        (roles as UserRole[]).includes(selected.role)
+                      ).slice(0, 12).map(([perm]) => (
+                        <div key={perm} className="flex items-center gap-2">
+                          <Check size={11} className="text-green-500 flex-shrink-0" />
+                          <span className="text-[10px] text-surface-600">{perm}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -269,48 +361,43 @@ export default function Utilisateurs() {
       )}
 
       {/* ── Modal création compte apporteur ── */}
-      {showModal && (
+      {showApporteur && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-surface-100">
               <div>
                 <h3 className="font-display font-bold text-surface-800">Créer un compte apporteur</h3>
-                <p className="text-xs text-surface-400 mt-0.5">L'apporteur recevra ses identifiants de connexion.</p>
+                <p className="text-xs text-surface-400 mt-0.5">L'apporteur pourra se connecter au CRM.</p>
               </div>
-              <button onClick={() => { setShowModal(false); setForm(EMPTY_APPORTEUR_FORM); setSaveResult(null) }}
+              <button onClick={() => { setShowApporteur(false); setFormApporteur(EMPTY_APPORTEUR_FORM); setResultApporteur(null) }}
                 className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-500 transition-colors">
                 <X size={16} />
               </button>
             </div>
-
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Prénom *">
-                  <input value={form.prenom} onChange={e => setForm(f => ({ ...f, prenom: e.target.value }))}
+                  <input value={formApporteur.prenom} onChange={e => setFormApporteur(f => ({ ...f, prenom: e.target.value }))}
                     placeholder="Jean" className={inputClass} />
                 </Field>
                 <Field label="Nom *">
-                  <input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))}
+                  <input value={formApporteur.nom} onChange={e => setFormApporteur(f => ({ ...f, nom: e.target.value }))}
                     placeholder="Dupont" className={inputClass} />
                 </Field>
               </div>
               <Field label="Email *">
-                <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                <input type="email" value={formApporteur.email} onChange={e => setFormApporteur(f => ({ ...f, email: e.target.value }))}
                   placeholder="jean.dupont@email.com" className={inputClass} />
               </Field>
               <Field label="Téléphone">
-                <input value={form.telephone} onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))}
+                <input value={formApporteur.telephone} onChange={e => setFormApporteur(f => ({ ...f, telephone: e.target.value }))}
                   placeholder="06.00.00.00.00" className={inputClass} />
               </Field>
               <Field label="Mot de passe *">
                 <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    placeholder="Min. 8 caractères"
-                    className={clsx(inputClass, 'pr-10')}
-                  />
+                  <input type={showPassword ? 'text' : 'password'} value={formApporteur.password}
+                    onChange={e => setFormApporteur(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Min. 8 caractères" className={clsx(inputClass, 'pr-10')} />
                   <button type="button" onClick={() => setShowPassword(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600">
                     {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -318,33 +405,82 @@ export default function Utilisateurs() {
                 </div>
               </Field>
               <Field label="Confirmer le mot de passe *">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={form.confirmPassword}
-                  onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
-                  placeholder="Répétez le mot de passe"
-                  className={inputClass}
-                />
+                <input type={showPassword ? 'text' : 'password'} value={formApporteur.confirmPassword}
+                  onChange={e => setFormApporteur(f => ({ ...f, confirmPassword: e.target.value }))}
+                  placeholder="Répétez le mot de passe" className={inputClass} />
               </Field>
-
-              {saveResult && (
+              {resultApporteur && (
                 <div className={clsx('p-3 rounded-lg text-xs font-medium',
-                  saveResult.success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100')}>
-                  {saveResult.message}
+                  resultApporteur.success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100')}>
+                  {resultApporteur.message}
                 </div>
               )}
             </div>
-
             <div className="flex gap-3 p-5 border-t border-surface-100">
-              <button onClick={() => { setShowModal(false); setForm(EMPTY_APPORTEUR_FORM); setSaveResult(null) }}
+              <button onClick={() => { setShowApporteur(false); setFormApporteur(EMPTY_APPORTEUR_FORM); setResultApporteur(null) }}
                 className="flex-1 py-2.5 rounded-lg border border-surface-200 text-xs font-semibold text-surface-600 hover:bg-surface-50 transition-colors">
                 Annuler
               </button>
-              <button
-                onClick={handleCreateApporteur}
-                disabled={saving || !form.prenom || !form.nom || !form.email || !form.password || !form.confirmPassword}
+              <button onClick={handleCreateApporteur}
+                disabled={savingApporteur || !formApporteur.prenom || !formApporteur.nom || !formApporteur.email || !formApporteur.password || !formApporteur.confirmPassword}
                 className="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors">
-                {saving ? 'Création…' : 'Créer le compte'}
+                {savingApporteur ? 'Création…' : 'Créer le compte'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal ancien commercial ── */}
+      {showAncien && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-5 border-b border-surface-100">
+              <div>
+                <h3 className="font-display font-bold text-surface-800">Ajouter un ancien commercial</h3>
+                <p className="text-xs text-surface-400 mt-0.5">Pour l'historique uniquement — sans accès au CRM.</p>
+              </div>
+              <button onClick={() => { setShowAncien(false); setFormAncien(EMPTY_ANCIEN_FORM); setResultAncien(null) }}
+                className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-500 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Prénom *">
+                  <input value={formAncien.prenom} onChange={e => setFormAncien(f => ({ ...f, prenom: e.target.value }))}
+                    placeholder="Jean" className={inputClass} />
+                </Field>
+                <Field label="Nom *">
+                  <input value={formAncien.nom} onChange={e => setFormAncien(f => ({ ...f, nom: e.target.value }))}
+                    placeholder="Dupont" className={inputClass} />
+                </Field>
+              </div>
+              <Field label="Téléphone">
+                <input value={formAncien.telephone} onChange={e => setFormAncien(f => ({ ...f, telephone: e.target.value }))}
+                  placeholder="06.00.00.00.00" className={inputClass} />
+              </Field>
+              <Field label="Notes (optionnel)">
+                <textarea value={formAncien.notes} onChange={e => setFormAncien(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Ex: période d'activité, secteur…" rows={2}
+                  className={clsx(inputClass, 'resize-none')} />
+              </Field>
+              {resultAncien && (
+                <div className={clsx('p-3 rounded-lg text-xs font-medium',
+                  resultAncien.success ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100')}>
+                  {resultAncien.message}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 p-5 border-t border-surface-100">
+              <button onClick={() => { setShowAncien(false); setFormAncien(EMPTY_ANCIEN_FORM); setResultAncien(null) }}
+                className="flex-1 py-2.5 rounded-lg border border-surface-200 text-xs font-semibold text-surface-600 hover:bg-surface-50 transition-colors">
+                Annuler
+              </button>
+              <button onClick={handleCreateAncien}
+                disabled={savingAncien || !formAncien.prenom || !formAncien.nom}
+                className="flex-1 py-2.5 rounded-lg bg-surface-700 hover:bg-surface-800 disabled:opacity-50 text-white text-xs font-semibold transition-colors">
+                {savingAncien ? 'Ajout…' : 'Ajouter'}
               </button>
             </div>
           </div>
