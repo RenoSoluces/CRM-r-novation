@@ -18,11 +18,9 @@ type Onglet = 'actives' | 'terminees' | 'perdues'
 const ETAPES_KANBAN = ETAPES_PIPELINE.filter(e => e.id !== 'perdu')
 
 function isActive(o: any) {
-  const etapeFinale = ['pose_livree', 'sav_suivi', 'perdu'].includes(o.etape)
-  const commSoc     = o.commission?.montantSociete ?? 0
-  const commPayee   = o.commissionPayee ?? 0
-  const commEnAttente = commSoc > 0 && commPayee < commSoc
-  return !etapeFinale || commEnAttente
+  if (o.etape === 'perdu') return false
+
+  return !(o.dateInstallation && o.datePaiementPartenaire)
 }
 
 function isTerminee(o: any) {
