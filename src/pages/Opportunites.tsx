@@ -26,11 +26,7 @@ function isActive(o: any) {
 }
 
 function isTerminee(o: any) {
-  const etapeFinale = ['pose_livree', 'sav_suivi'].includes(o.etape)
-  const commSoc     = o.commission?.montantSociete ?? 0
-  const commPayee   = o.commissionPayee ?? 0
-  const estPayee    = commSoc === 0 || commPayee >= commSoc
-  return etapeFinale && estPayee
+  return !!o.dateInstallation && !!o.datePaiementPartenaire
 }
 
 export default function Opportunites() {
