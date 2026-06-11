@@ -41,6 +41,14 @@ export default function OpportuniteDetail() {
   const [editCommission, setEditCommission] = useState(false)
   const [editDates, setEditDates]           = useState(false)
   const [editInstallateurs, setEditInstallateurs] = useState(false)
+  const [editMontants, setEditMontants] = useState(false)
+
+const [montantsForm, setMontantsForm] = useState({
+  montantDevis: 0,
+  montantAidesMPR: 0,
+  montantAidesCEE: 0,
+  montantNet: 0,
+})
   const [commissionForm, setCommissionForm] = useState({
     montantSociete: 0, montantCommercial: 0, montantApporteur: 0,
   })
@@ -79,6 +87,12 @@ export default function OpportuniteDetail() {
         datePaiementPartenaire: toInputValue(opp.datePaiementPartenaire),
       })
       setInstallateurIds(opp.installateurIds ?? [])
+      setMontantsForm({
+  montantDevis: opp.montantDevis ?? 0,
+  montantAidesMPR: opp.montantAidesMPR ?? 0,
+  montantAidesCEE: opp.montantAidesCEE ?? 0,
+  montantNet: opp.montantNet ?? 0,
+})
     }
   }, [opp?.id])
 
@@ -134,6 +148,16 @@ export default function OpportuniteDetail() {
     await updateOpportunite(opp!.id, { installateurIds })
     setEditInstallateurs(false)
   }
+  async function handleSaveMontants() {
+  await updateOpportunite(opp!.id, {
+    montantDevis: montantsForm.montantDevis,
+    montantAidesMPR: montantsForm.montantAidesMPR,
+    montantAidesCEE: montantsForm.montantAidesCEE,
+    montantNet: montantsForm.montantNet,
+  })
+
+  setEditMontants(false)
+}
 
   function toggleInstallateur(instId: string) {
     setInstallateurIds(ids =>
@@ -200,21 +224,119 @@ export default function OpportuniteDetail() {
 
           {/* Montants */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-4">Montants</h3>
-            <div className="grid grid-cols-4 gap-3">
-              {[
-                { label: 'Devis total',    value: opp.montantDevis,    color: 'text-surface-800' },
-                { label: 'Aide MPR',       value: opp.montantAidesMPR, color: 'text-blue-600' },
-                { label: 'Aide CEE',       value: opp.montantAidesCEE, color: 'text-cyan-600' },
-                { label: 'Reste à charge', value: opp.montantNet,      color: 'text-green-600' },
-              ].map(m => (
-                <div key={m.label} className="bg-surface-50 rounded-xl p-3 text-center">
-                  <p className={clsx('font-display font-bold text-lg', m.color)}>
-                    {formatEuro(m.value)}
-                  </p>
-                  <p className="text-[10px] text-surface-500 mt-0.5">{m.label}</p>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-4">
+  <h3 className="font-display font-semibold text-surface-800 text-sm">
+    Montants
+  </h3>
+
+  {can('opportunites.edit') && !editMontants && (
+    <button
+      onClick={() => setEditMontants(true)}
+      className="flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium"
+    >
+      <Edit2 size={11} />
+      Modifier
+    </button>
+  )}
+</div>
+            {editMontants ? (
+  <div className="space-y-3">
+
+    <div>
+      <label className="block text-xs mb-1">Devis total</label>
+      <input
+        type="number"
+        value={montantsForm.montantDevis}
+        onChange={(e) =>
+          setMontantsForm({
+            ...montantsForm,
+            montantDevis: Number(e.target.value),
+          })
+        }
+        className="w-full px-3 py-2 rounded-lg border border-surface-200"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs mb-1">Aide MPR</label>
+      <input
+        type="number"
+        value={montantsForm.montantAidesMPR}
+        onChange={(e) =>
+          setMontantsForm({
+            ...montantsForm,
+            montantAidesMPR: Number(e.target.value),
+          })
+        }
+        className="w-full px-3 py-2 rounded-lg border border-surface-200"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs mb-1">Aide CEE</label>
+      <input
+        type="number"
+        value={montantsForm.montantAidesCEE}
+        onChange={(e) =>
+          setMontantsForm({
+            ...montantsForm,
+            montantAidesCEE: Number(e.target.value),
+          })
+        }
+        className="w-full px-3 py-2 rounded-lg border border-surface-200"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs mb-1">Reste à charge</label>
+      <input
+        type="number"
+        value={montantsForm.montantNet}
+        onChange={(e) =>
+          setMontantsForm({
+            ...montantsForm,
+            montantNet: Number(e.target.value),
+          })
+        }
+        className="w-full px-3 py-2 rounded-lg border border-surface-200"
+      />
+    </div>
+
+    <div className="flex gap-2">
+      <button
+        onClick={() => setEditMontants(false)}
+        className="flex-1 py-2 rounded-lg border border-surface-200"
+      >
+        Annuler
+      </button>
+
+      <button
+        onClick={handleSaveMontants}
+        className="flex-1 py-2 rounded-lg bg-brand-600 text-white"
+      >
+        Enregistrer
+      </button>
+    </div>
+
+  </div>
+) : (
+  <div className="grid grid-cols-4 gap-3">
+    {[
+      { label: 'Devis total', value: opp.montantDevis, color: 'text-surface-800' },
+      { label: 'Aide MPR', value: opp.montantAidesMPR, color: 'text-blue-600' },
+      { label: 'Aide CEE', value: opp.montantAidesCEE, color: 'text-cyan-600' },
+      { label: 'Reste à charge', value: opp.montantNet, color: 'text-green-600' },
+    ].map(m => (
+      <div key={m.label} className="bg-surface-50 rounded-xl p-3 text-center">
+        <p className={clsx('font-display font-bold text-lg', m.color)}>
+          {formatEuro(m.value)}
+        </p>
+        <p className="text-[10px] text-surface-500 mt-0.5">{m.label}</p>
+      </div>
+    ))}
+  </div>
+)}
+              ))
             </div>
             {aidesTotal > 0 && (
               <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-100 text-center">
@@ -639,6 +761,5 @@ export default function OpportuniteDetail() {
 
         </div>
       </div>
-    </div>
   )
 }
