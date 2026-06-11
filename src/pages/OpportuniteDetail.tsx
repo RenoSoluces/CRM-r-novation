@@ -336,7 +336,6 @@ const [montantsForm, setMontantsForm] = useState({
     ))}
   </div>
 )}
-              ))
             </div>
             {aidesTotal > 0 && (
               <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-100 text-center">
