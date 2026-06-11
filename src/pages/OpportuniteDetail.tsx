@@ -187,35 +187,64 @@ const [montantsForm, setMontantsForm] = useState({
 
       {/* Pipeline */}
       <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-        <p className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">Avancement du dossier</p>
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
-          {ETAPES_PIPELINE.filter(e => e.id !== 'perdu').map((etape, idx) => {
-            const isActive    = etape.id === opp.etape
-            const isPassed    = idx < etapeIndex
-            const isClickable = can('opportunites.edit')
-            return (
-              <div key={etape.id} className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  onClick={() => isClickable && handleMoveEtape(etape.id)}
-                  className={clsx(
-                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all',
-                    isActive  && 'text-white shadow-sm',
-                    isPassed  && 'text-white opacity-70',
-                    !isActive && !isPassed && 'bg-surface-100 text-surface-400',
-                    isClickable && !isActive && 'hover:opacity-90 cursor-pointer',
-                  )}
-                  style={isActive || isPassed ? { background: etape.couleur } : {}}
-                >
-                  {etape.label.replace(' ✓', '')}
-                </button>
-                {idx < ETAPES_PIPELINE.length - 2 && (
-                  <ChevronRight size={12} className="text-surface-300 flex-shrink-0" />
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+  <p className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">
+    Avancement du dossier
+  </p>
+
+  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+    {ETAPES_PIPELINE
+      .filter(e => e.id !== 'perdu')
+      .map((etape, idx) => {
+        const isActive = etape.id === opp.etape
+        const isPassed = idx < etapeIndex
+        const isClickable = can('opportunites.edit')
+
+        return (
+          <div key={etape.id} className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => isClickable && handleMoveEtape(etape.id)}
+              className={clsx(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all',
+                isActive && 'text-white shadow-sm',
+                isPassed && 'text-white opacity-70',
+                !isActive && !isPassed && 'bg-surface-100 text-surface-400',
+                isClickable && !isActive && 'hover:opacity-90 cursor-pointer'
+              )}
+              style={isActive || isPassed ? { background: etape.couleur } : {}}
+            >
+              {etape.label.replace(' ✓', '')}
+            </button>
+
+            {idx < ETAPES_PIPELINE.filter(e => e.id !== 'perdu').length - 1 && (
+              <ChevronRight
+                size={12}
+                className="text-surface-300 flex-shrink-0"
+              />
+            )}
+          </div>
+        )
+      })}
+  </div>
+
+  {can('opportunites.edit') && opp.etape !== 'perdu' && (
+    <div className="mt-4 pt-4 border-t border-surface-100">
+      <button
+        onClick={() => handleMoveEtape('perdu')}
+        className="px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
+      >
+        ❌ Marquer l'opportunité comme perdue
+      </button>
+    </div>
+  )}
+
+  {opp.etape === 'perdu' && (
+    <div className="mt-4 pt-4 border-t border-surface-100">
+      <span className="inline-flex items-center px-3 py-2 rounded-lg bg-red-100 text-red-700 text-xs font-semibold">
+        ❌ Opportunité perdue
+      </span>
+    </div>
+  )}
+</div>
 
       <div className="grid grid-cols-[1fr_320px] gap-5">
 
@@ -336,6 +365,7 @@ const [montantsForm, setMontantsForm] = useState({
     ))}
   </div>
 )}
+              ))
             </div>
             {aidesTotal > 0 && (
               <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-100 text-center">
