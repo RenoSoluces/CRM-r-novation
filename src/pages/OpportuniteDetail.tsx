@@ -32,23 +32,23 @@ export default function OpportuniteDetail() {
     opportunites, updateOpportunite, moveEtape, addActivite,
     updateCommission, payerCommission, fetchOpportunites,
   } = useOpportunitesStore()
-  const { contacts, fetchContacts }         = useContactsStore()
-  const { produits }                        = useProduitsStore()
+  const { contacts, fetchContacts }           = useContactsStore()
+  const { produits }                          = useProduitsStore()
   const { installateurs, fetchInstallateurs } = useInstallateursStore()
 
-  const [newActivite, setNewActivite]       = useState({ type: 'note' as Activite['type'], titre: '' })
-  const [showForm, setShowForm]             = useState(false)
-  const [editCommission, setEditCommission] = useState(false)
-  const [editDates, setEditDates]           = useState(false)
+  const [newActivite, setNewActivite]             = useState({ type: 'note' as Activite['type'], titre: '' })
+  const [showForm, setShowForm]                   = useState(false)
+  const [editCommission, setEditCommission]       = useState(false)
+  const [editDates, setEditDates]                 = useState(false)
   const [editInstallateurs, setEditInstallateurs] = useState(false)
-  const [editMontants, setEditMontants] = useState(false)
+  const [editMontants, setEditMontants]           = useState(false)
 
-const [montantsForm, setMontantsForm] = useState({
-  montantDevis: 0,
-  montantAidesMPR: 0,
-  montantAidesCEE: 0,
-  montantNet: 0,
-})
+  const [montantsForm, setMontantsForm] = useState({
+    montantDevis: 0,
+    montantAidesMPR: 0,
+    montantAidesCEE: 0,
+    montantNet: 0,
+  })
   const [commissionForm, setCommissionForm] = useState({
     montantSociete: 0, montantCommercial: 0, montantApporteur: 0,
   })
@@ -88,11 +88,11 @@ const [montantsForm, setMontantsForm] = useState({
       })
       setInstallateurIds(opp.installateurIds ?? [])
       setMontantsForm({
-  montantDevis: opp.montantDevis ?? 0,
-  montantAidesMPR: opp.montantAidesMPR ?? 0,
-  montantAidesCEE: opp.montantAidesCEE ?? 0,
-  montantNet: opp.montantNet ?? 0,
-})
+        montantDevis:     opp.montantDevis     ?? 0,
+        montantAidesMPR:  opp.montantAidesMPR  ?? 0,
+        montantAidesCEE:  opp.montantAidesCEE  ?? 0,
+        montantNet:       opp.montantNet       ?? 0,
+      })
     }
   }, [opp?.id])
 
@@ -112,7 +112,6 @@ const [montantsForm, setMontantsForm] = useState({
   const commPaid = opp.commissionPayee ?? 0
   const commLeft = Math.max(0, commDue - commPaid)
 
-  // Installateurs liés à cette opportunité
   const installateursDuDossier = installateurs.filter(i =>
     (opp.installateurIds ?? []).includes(i.id)
   )
@@ -148,16 +147,16 @@ const [montantsForm, setMontantsForm] = useState({
     await updateOpportunite(opp!.id, { installateurIds })
     setEditInstallateurs(false)
   }
-  async function handleSaveMontants() {
-  await updateOpportunite(opp!.id, {
-    montantDevis: montantsForm.montantDevis,
-    montantAidesMPR: montantsForm.montantAidesMPR,
-    montantAidesCEE: montantsForm.montantAidesCEE,
-    montantNet: montantsForm.montantNet,
-  })
 
-  setEditMontants(false)
-}
+  async function handleSaveMontants() {
+    await updateOpportunite(opp!.id, {
+      montantDevis: montantsForm.montantDevis,
+      montantAidesMPR: montantsForm.montantAidesMPR,
+      montantAidesCEE: montantsForm.montantAidesCEE,
+      montantNet: montantsForm.montantNet,
+    })
+    setEditMontants(false)
+  }
 
   function toggleInstallateur(instId: string) {
     setInstallateurIds(ids =>
@@ -187,64 +186,61 @@ const [montantsForm, setMontantsForm] = useState({
 
       {/* Pipeline */}
       <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-  <p className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">
-    Avancement du dossier
-  </p>
+        <p className="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">
+          Avancement du dossier
+        </p>
 
-  <div className="flex items-center gap-1 overflow-x-auto pb-1">
-    {ETAPES_PIPELINE
-      .filter(e => e.id !== 'perdu')
-      .map((etape, idx) => {
-        const isActive = etape.id === opp.etape
-        const isPassed = idx < etapeIndex
-        const isClickable = can('opportunites.edit')
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {ETAPES_PIPELINE
+            .filter(e => e.id !== 'perdu')
+            .map((etape, idx) => {
+              const isActive = etape.id === opp.etape
+              const isPassed = idx < etapeIndex
+              const isClickable = can('opportunites.edit')
 
-        return (
-          <div key={etape.id} className="flex items-center gap-1 flex-shrink-0">
+              return (
+                <div key={etape.id} className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => isClickable && handleMoveEtape(etape.id)}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all',
+                      isActive && 'text-white shadow-sm',
+                      isPassed && 'text-white opacity-70',
+                      !isActive && !isPassed && 'bg-surface-100 text-surface-400',
+                      isClickable && !isActive && 'hover:opacity-90 cursor-pointer'
+                    )}
+                    style={isActive || isPassed ? { background: etape.couleur } : {}}
+                  >
+                    {etape.label.replace(' ✓', '')}
+                  </button>
+
+                  {idx < ETAPES_PIPELINE.filter(e => e.id !== 'perdu').length - 1 && (
+                    <ChevronRight size={12} className="text-surface-300 flex-shrink-0" />
+                  )}
+                </div>
+              )
+            })}
+        </div>
+
+        {can('opportunites.edit') && opp.etape !== 'perdu' && (
+          <div className="mt-4 pt-4 border-t border-surface-100">
             <button
-              onClick={() => isClickable && handleMoveEtape(etape.id)}
-              className={clsx(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all',
-                isActive && 'text-white shadow-sm',
-                isPassed && 'text-white opacity-70',
-                !isActive && !isPassed && 'bg-surface-100 text-surface-400',
-                isClickable && !isActive && 'hover:opacity-90 cursor-pointer'
-              )}
-              style={isActive || isPassed ? { background: etape.couleur } : {}}
+              onClick={() => handleMoveEtape('perdu')}
+              className="px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
             >
-              {etape.label.replace(' ✓', '')}
+              ❌ Marquer l'opportunité comme perdue
             </button>
-
-            {idx < ETAPES_PIPELINE.filter(e => e.id !== 'perdu').length - 1 && (
-              <ChevronRight
-                size={12}
-                className="text-surface-300 flex-shrink-0"
-              />
-            )}
           </div>
-        )
-      })}
-  </div>
+        )}
 
-  {can('opportunites.edit') && opp.etape !== 'perdu' && (
-    <div className="mt-4 pt-4 border-t border-surface-100">
-      <button
-        onClick={() => handleMoveEtape('perdu')}
-        className="px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
-      >
-        ❌ Marquer l'opportunité comme perdue
-      </button>
-    </div>
-  )}
-
-  {opp.etape === 'perdu' && (
-    <div className="mt-4 pt-4 border-t border-surface-100">
-      <span className="inline-flex items-center px-3 py-2 rounded-lg bg-red-100 text-red-700 text-xs font-semibold">
-        ❌ Opportunité perdue
-      </span>
-    </div>
-  )}
-</div>
+        {opp.etape === 'perdu' && (
+          <div className="mt-4 pt-4 border-t border-surface-100">
+            <span className="inline-flex items-center px-3 py-2 rounded-lg bg-red-100 text-red-700 text-xs font-semibold">
+              ❌ Opportunité perdue
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-[1fr_320px] gap-5">
 
@@ -254,119 +250,111 @@ const [montantsForm, setMontantsForm] = useState({
           {/* Montants */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
             <div className="flex items-center justify-between mb-4">
-  <h3 className="font-display font-semibold text-surface-800 text-sm">
-    Montants
-  </h3>
-
-  {can('opportunites.edit') && !editMontants && (
-    <button
-      onClick={() => setEditMontants(true)}
-      className="flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium"
-    >
-      <Edit2 size={11} />
-      Modifier
-    </button>
-  )}
-</div>
-            {editMontants ? (
-  <div className="space-y-3">
-
-    <div>
-      <label className="block text-xs mb-1">Devis total</label>
-      <input
-        type="number"
-        value={montantsForm.montantDevis}
-        onChange={(e) =>
-          setMontantsForm({
-            ...montantsForm,
-            montantDevis: Number(e.target.value),
-          })
-        }
-        className="w-full px-3 py-2 rounded-lg border border-surface-200"
-      />
-    </div>
-
-    <div>
-      <label className="block text-xs mb-1">Aide MPR</label>
-      <input
-        type="number"
-        value={montantsForm.montantAidesMPR}
-        onChange={(e) =>
-          setMontantsForm({
-            ...montantsForm,
-            montantAidesMPR: Number(e.target.value),
-          })
-        }
-        className="w-full px-3 py-2 rounded-lg border border-surface-200"
-      />
-    </div>
-
-    <div>
-      <label className="block text-xs mb-1">Aide CEE</label>
-      <input
-        type="number"
-        value={montantsForm.montantAidesCEE}
-        onChange={(e) =>
-          setMontantsForm({
-            ...montantsForm,
-            montantAidesCEE: Number(e.target.value),
-          })
-        }
-        className="w-full px-3 py-2 rounded-lg border border-surface-200"
-      />
-    </div>
-
-    <div>
-      <label className="block text-xs mb-1">Reste à charge</label>
-      <input
-        type="number"
-        value={montantsForm.montantNet}
-        onChange={(e) =>
-          setMontantsForm({
-            ...montantsForm,
-            montantNet: Number(e.target.value),
-          })
-        }
-        className="w-full px-3 py-2 rounded-lg border border-surface-200"
-      />
-    </div>
-
-    <div className="flex gap-2">
-      <button
-        onClick={() => setEditMontants(false)}
-        className="flex-1 py-2 rounded-lg border border-surface-200"
-      >
-        Annuler
-      </button>
-
-      <button
-        onClick={handleSaveMontants}
-        className="flex-1 py-2 rounded-lg bg-brand-600 text-white"
-      >
-        Enregistrer
-      </button>
-    </div>
-
-  </div>
-) : (
-  <div className="grid grid-cols-4 gap-3">
-    {[
-      { label: 'Devis total', value: opp.montantDevis, color: 'text-surface-800' },
-      { label: 'Aide MPR', value: opp.montantAidesMPR, color: 'text-blue-600' },
-      { label: 'Aide CEE', value: opp.montantAidesCEE, color: 'text-cyan-600' },
-      { label: 'Reste à charge', value: opp.montantNet, color: 'text-green-600' },
-    ].map(m => (
-      <div key={m.label} className="bg-surface-50 rounded-xl p-3 text-center">
-        <p className={clsx('font-display font-bold text-lg', m.color)}>
-          {formatEuro(m.value)}
-        </p>
-        <p className="text-[10px] text-surface-500 mt-0.5">{m.label}</p>
-      </div>
-    ))}
-  </div>
-)}
-              ))
+              <h3 className="font-display font-semibold text-surface-800 text-sm">
+                Montants
+              </h3>
+              {can('utilisateurs.edit') && !editMontants && (
+                <button
+                  onClick={() => setEditMontants(true)}
+                  className="flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  <Edit2 size={11} />
+                  Modifier
+                </button>
+              )}
             </div>
+
+            {editMontants ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
+                    Devis total
+                  </label>
+                  <input
+                    type="number"
+                    value={montantsForm.montantDevis}
+                    onChange={(e) =>
+                      setMontantsForm({ ...montantsForm, montantDevis: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
+                    Aide MPR
+                  </label>
+                  <input
+                    type="number"
+                    value={montantsForm.montantAidesMPR}
+                    onChange={(e) =>
+                      setMontantsForm({ ...montantsForm, montantAidesMPR: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
+                    Aide CEE
+                  </label>
+                  <input
+                    type="number"
+                    value={montantsForm.montantAidesCEE}
+                    onChange={(e) =>
+                      setMontantsForm({ ...montantsForm, montantAidesCEE: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-1">
+                    Reste à charge
+                  </label>
+                  <input
+                    type="number"
+                    value={montantsForm.montantNet}
+                    onChange={(e) =>
+                      setMontantsForm({ ...montantsForm, montantNet: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setEditMontants(false)}
+                    className="flex-1 py-2 rounded-lg border border-surface-200 text-xs font-medium text-surface-600 hover:bg-surface-50 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSaveMontants}
+                    className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors"
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: 'Devis total',    value: opp.montantDevis,    color: 'text-surface-800' },
+                  { label: 'Aide MPR',       value: opp.montantAidesMPR, color: 'text-blue-600' },
+                  { label: 'Aide CEE',       value: opp.montantAidesCEE, color: 'text-cyan-600' },
+                  { label: 'Reste à charge', value: opp.montantNet,      color: 'text-green-600' },
+                ].map(m => (
+                  <div key={m.label} className="bg-surface-50 rounded-xl p-3 text-center">
+                    <p className={clsx('font-display font-bold text-lg', m.color)}>
+                      {formatEuro(m.value)}
+                    </p>
+                    <p className="text-[10px] text-surface-500 mt-0.5">{m.label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {aidesTotal > 0 && (
               <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-100 text-center">
                 <p className="text-xs text-green-700 font-medium">
@@ -531,7 +519,7 @@ const [montantsForm, setMontantsForm] = useState({
             </div>
           )}
 
-          {/* ── Installateurs ── */}
+          {/* Installateurs */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-display font-semibold text-surface-800 text-sm flex items-center gap-1.5">
@@ -547,7 +535,6 @@ const [montantsForm, setMontantsForm] = useState({
 
             {editInstallateurs ? (
               <div className="space-y-2">
-                {/* Sélecteur multi-installateurs */}
                 <div className="max-h-48 overflow-y-auto space-y-1 border border-surface-200 rounded-lg p-2">
                   {installateurs.filter(i => i.actif).length === 0 ? (
                     <p className="text-xs text-surface-400 text-center py-3">Aucun installateur disponible</p>
@@ -594,7 +581,6 @@ const [montantsForm, setMontantsForm] = useState({
                       <Wrench size={12} className="text-teal-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      {/* Admin voit le nom complet, les autres aussi mais sans détails de contact */}
                       <p className="text-xs font-semibold text-surface-800 truncate">{inst.raisonSociale}</p>
                       {can('installateurs.view') && (
                         <p className="text-[10px] text-surface-400 truncate">{inst.adresse.ville}</p>
@@ -790,5 +776,6 @@ const [montantsForm, setMontantsForm] = useState({
 
         </div>
       </div>
+    </div>
   )
 }
