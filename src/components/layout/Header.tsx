@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, Plus, X, Check, ChevronRight } from 'lucide-react'
+import { Search, Bell, Plus, X, Check, CheckCircle2, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useNotificationsStore } from '@/store/notificationsStore'
 import { useContactsStore } from '@/store/contactsStore'
@@ -22,8 +22,10 @@ const NOTIF_ICONS: Record<string, string> = {
 export default function Header({ title }: { title: string }) {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { getNonLues, getParDestinataire, marquerLue, marquerToutesLues } =
-    useNotificationsStore()
+  const {
+    getNonLues, getParDestinataire, marquerLue, marquerTraitee,
+    marquerToutesLues, fetchNotifications,
+  } = useNotificationsStore()
   const { contacts } = useContactsStore()
   const { opportunites } = useOpportunitesStore()
 
@@ -34,10 +36,13 @@ export default function Header({ title }: { title: string }) {
   const notifRef  = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const nonLues     = user ? getNonLues(user.id) : []
+  useEffect(() => {
+    fetchNotifications()
+  }, [])
+
+  const nonLues      = user ? getNonLues(user.id) : []
   const toutesNotifs = user ? getParDestinataire(user.id) : []
 
-  // Ferme les panneaux au clic extérieur
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (notifRef.current  && !notifRef.current.contains(e.target as Node))  setShowNotifs(false)
@@ -47,7 +52,6 @@ export default function Header({ title }: { title: string }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Résultats de recherche live
   const results =
     query.length >= 2
       ? [
@@ -83,15 +87,12 @@ export default function Header({ title }: { title: string }) {
   return (
     <header className="h-14 bg-white border-b border-surface-200 flex items-center justify-between px-6 flex-shrink-0">
 
-      {/* Titre */}
       <h1 className="font-display font-semibold text-surface-800 text-lg">
         {title}
       </h1>
 
-      {/* Actions */}
       <div className="flex items-center gap-3">
 
-        {/* Barre de recherche */}
         <div ref={searchRef} className="relative">
           <div
             className={clsx(
@@ -117,7 +118,6 @@ export default function Header({ title }: { title: string }) {
             )}
           </div>
 
-          {/* Résultats */}
           {showSearch && results.length > 0 && (
             <div className="absolute top-full mt-1 right-0 w-80 bg-white rounded-xl border border-surface-200 shadow-card-hover z-50 overflow-hidden">
               {results.map((r) => (
@@ -160,7 +160,6 @@ export default function Header({ title }: { title: string }) {
             )}
           </button>
 
-          {/* Panneau notifications */}
           {showNotifs && (
             <div className="absolute top-full mt-1 right-0 w-96 bg-white rounded-xl border border-surface-200 shadow-card-hover z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100">
@@ -189,37 +188,53 @@ export default function Header({ title }: { title: string }) {
                   </p>
                 ) : (
                   toutesNotifs.map((n) => (
-                    <button
+                    <div
                       key={n.id}
-                      onClick={() => marquerLue(n.id)}
                       className={clsx(
-                        'w-full flex gap-3 px-4 py-3 text-left hover:bg-surface-50 transition-colors',
-                        !n.lue && 'bg-brand-50'
+                        'w-full flex gap-3 px-4 py-3 hover:bg-surface-50 transition-colors',
+                        !n.lue && 'bg-brand-50',
+                        n.traitee && 'opacity-50'
                       )}
                     >
-                      <span className="text-base flex-shrink-0 mt-0.5">
-                        {NOTIF_ICONS[n.type] ?? 'ℹ️'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={clsx(
-                            'text-xs font-medium truncate',
-                            n.lue ? 'text-surface-500' : 'text-surface-800'
-                          )}
-                        >
-                          {n.titre}
-                        </p>
-                        <p className="text-[10px] text-surface-400 mt-0.5 line-clamp-2">
-                          {n.message}
-                        </p>
-                        <p className="text-[10px] text-surface-400 mt-1">
-                          {formatRelative(n.createdAt)}
-                        </p>
+                      <button onClick={() => marquerLue(n.id)} className="flex gap-3 flex-1 min-w-0 text-left">
+                        <span className="text-base flex-shrink-0 mt-0.5">
+                          {NOTIF_ICONS[n.type] ?? 'ℹ️'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={clsx(
+                              'text-xs font-medium truncate',
+                              n.lue ? 'text-surface-500' : 'text-surface-800'
+                            )}
+                          >
+                            {n.titre}
+                          </p>
+                          <p className="text-[10px] text-surface-400 mt-0.5 line-clamp-2">
+                            {n.message}
+                          </p>
+                          <p className="text-[10px] text-surface-400 mt-1">
+                            {formatRelative(n.createdAt)}
+                          </p>
+                        </div>
+                      </button>
+
+                      {/* ── Marquer comme traitée ── */}
+                      <div className="flex-shrink-0 flex items-center">
+                        {n.traitee ? (
+                          <span className="text-[10px] font-bold text-green-600 flex items-center gap-1">
+                            <CheckCircle2 size={12} /> Traité
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); marquerTraitee(n.id) }}
+                            title="Marquer comme traitée"
+                            className="text-surface-300 hover:text-green-600 transition-colors"
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
                       </div>
-                      {!n.lue && (
-                        <div className="w-2 h-2 rounded-full bg-brand-500 mt-1.5 flex-shrink-0" />
-                      )}
-                    </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -227,7 +242,6 @@ export default function Header({ title }: { title: string }) {
           )}
         </div>
 
-        {/* Bouton nouveau contact */}
         <button
           onClick={() => navigate('/contacts/nouveau')}
           className="flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
@@ -238,4 +252,4 @@ export default function Header({ title }: { title: string }) {
       </div>
     </header>
   )
-} 
+}
