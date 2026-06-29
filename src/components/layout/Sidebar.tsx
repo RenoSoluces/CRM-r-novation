@@ -54,7 +54,6 @@ export default function Sidebar() {
   return (
     <aside className="w-52 min-h-screen bg-brand-900 flex flex-col flex-shrink-0 shadow-sidebar">
 
-      {/* Logo */}
       <div className="px-4 py-5 border-b border-brand-800">
         <div className="flex flex-col items-center gap-2">
           <img
@@ -73,7 +72,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
         <NavSection label="PRINCIPAL" items={NAV_PRINCIPAL} can={can} />
         <NavSection label="PRODUITS"  items={NAV_PRODUITS}  can={can} />
@@ -85,7 +83,7 @@ export default function Sidebar() {
 
       {/* Profil utilisateur */}
       <div className="border-t border-brand-800 p-3">
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-brand-800 transition-colors cursor-pointer group">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-brand-800 transition-colors">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold font-display flex-shrink-0">
             {user ? getInitiales(user.prenom, user.nom) : '??'}
           </div>
@@ -97,12 +95,13 @@ export default function Sidebar() {
               {user ? ROLE_LABELS[user.role] : ''}
             </p>
           </div>
+          {/* ── FIX : toujours visible, plus besoin de survol ── */}
           <button
             onClick={logout}
             title="Déconnexion"
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-400 hover:text-red-400"
+            className="text-brand-400 hover:text-red-400 transition-colors flex-shrink-0"
           >
-            <LogOut size={13} />
+            <LogOut size={15} />
           </button>
         </div>
       </div>
