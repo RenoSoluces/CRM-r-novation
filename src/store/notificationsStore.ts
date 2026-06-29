@@ -1,121 +1,118 @@
 import { create } from 'zustand'
+import { supabase } from '@/lib/supabase'
 import type { Notification } from '@/types/notification'
 
-const mockNotifications: Notification[] = [
-  {
-    id: 'n1',
-    type: 'rappel_rdv',
-    titre: 'RDV demain — Famille Martin',
-    message: 'RDV visite technique prévu le 05/02 à 10h00 à Carcassonne.',
-    lienId: 'o1',
-    lienType: 'opportunite',
-    destinataireId: 'u3',
-    lue: false,
-    dateEcheance: '2025-02-05',
-    createdAt: '2025-02-04',
-  },
-  {
-    id: 'n2',
-    type: 'relance_prospect',
-    titre: 'Relance — Pierre Fontaine',
-    message: 'Devis envoyé il y a 7 jours sans réponse. Penser à relancer.',
-    lienId: 'o3',
-    lienType: 'opportunite',
-    destinataireId: 'u4',
-    lue: false,
-    dateEcheance: '2025-02-06',
-    createdAt: '2025-02-05',
-  },
-  {
-    id: 'n3',
-    type: 'suivi_dossier_mpr',
-    titre: 'Dossier MPR à constituer — Dupuis',
-    message: "Le dossier MaPrimeRénov' pour Alain Dupuis doit être soumis avant le 28/02.",
-    lienId: 'o2',
-    lienType: 'opportunite',
-    destinataireId: 'u3',
-    lue: false,
-    dateEcheance: '2025-02-28',
-    createdAt: '2025-02-01',
-  },
-  {
-    id: 'n4',
-    type: 'nouveau_lead',
-    titre: 'Nouveau lead — Lucas Petit',
-    message: 'Nouveau prospect entrant via le site web, intéressé par panneaux photovoltaïques.',
-    lienId: 'o7',
-    lienType: 'opportunite',
-    destinataireId: 'u3',
-    lue: true,
-    createdAt: '2025-01-25',
-  },
-  {
-    id: 'n5',
-    type: 'installation_proche',
-    titre: 'Installation dans 3 jours — Fontaine',
-    message: 'Chantier PV 9kWc prévu le 05/03. Vérifier confirmation installateur Solaire Occitanie.',
-    lienId: 'o3',
-    lienType: 'opportunite',
-    destinataireId: 'u4',
-    lue: false,
-    dateEcheance: '2025-03-05',
-    createdAt: '2025-03-02',
-  },
-  {
-    id: 'n6',
-    type: 'suivi_dossier_cee',
-    titre: 'CEE versé — Famille Bernard',
-    message: 'La prime CEE de 800€ a été versée pour le dossier isolation combles.',
-    lienId: 'o4',
-    lienType: 'opportunite',
-    destinataireId: 'u4',
-    lue: true,
-    createdAt: '2025-01-08',
-  },
-]
+function mapRow(row: any): Notification {
+  return {
+    id: row.id,
+    type: row.type,
+    titre: row.titre,
+    message: row.message,
+    lienId: row.lien_id,
+    lienType: row.lien_type,
+    destinataireId: row.destinataire_id,
+    lue: row.lue,
+    traitee: row.traitee ?? false,
+    dateEcheance: row.date_echeance,
+    createdAt: row.created_at,
+  }
+}
 
 interface NotificationsStore {
   notifications: Notification[]
-  marquerLue: (id: string) => void
-  marquerToutesLues: (destinataireId: string) => void
-  ajouterNotification: (n: Notification) => void
-  supprimerNotification: (id: string) => void
+  isLoading: boolean
+  fetchNotifications: () => Promise<void>
+  marquerLue: (id: string) => Promise<void>
+  marquerTraitee: (id: string) => Promise<void>
+  marquerToutesLues: (destinataireId: string) => Promise<void>
+  ajouterNotification: (n: Omit<Notification, 'id' | 'createdAt'>) => Promise<void>
+  supprimerNotification: (id: string) => Promise<void>
   getNonLues: (destinataireId: string) => Notification[]
   getParDestinataire: (destinataireId: string) => Notification[]
 }
 
 export const useNotificationsStore = create<NotificationsStore>()((set, get) => ({
-  notifications: mockNotifications,
+  notifications: [],
+  isLoading: false,
 
-  marquerLue: (id) =>
-    set((s) => ({
-      notifications: s.notifications.map((n) =>
-        n.id === id ? { ...n, lue: true } : n
-      ),
-    })),
+  fetchNotifications: async () => {
+    set({ isLoading: true })
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) set({ notifications: data.map(mapRow) })
+    set({ isLoading: false })
+  },
 
-  marquerToutesLues: (destinataireId) =>
-    set((s) => ({
-      notifications: s.notifications.map((n) =>
-        n.destinataireId === destinataireId ? { ...n, lue: true } : n
-      ),
-    })),
+  marquerLue: async (id) => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .update({ lue: true })
+      .eq('id', id)
+      .select()
+      .single()
+    if (!error && data) {
+      set(s => ({ notifications: s.notifications.map(n => n.id === id ? mapRow(data) : n) }))
+    }
+  },
 
-  ajouterNotification: (n) =>
-    set((s) => ({ notifications: [n, ...s.notifications] })),
+  marquerTraitee: async (id) => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .update({ traitee: true, lue: true })
+      .eq('id', id)
+      .select()
+      .single()
+    if (!error && data) {
+      set(s => ({ notifications: s.notifications.map(n => n.id === id ? mapRow(data) : n) }))
+    }
+  },
 
-  supprimerNotification: (id) =>
-    set((s) => ({
-      notifications: s.notifications.filter((n) => n.id !== id),
-    })),
+  marquerToutesLues: async (destinataireId) => {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ lue: true })
+      .eq('destinataire_id', destinataireId)
+      .eq('lue', false)
+    if (!error) {
+      set(s => ({
+        notifications: s.notifications.map(n =>
+          n.destinataireId === destinataireId ? { ...n, lue: true } : n
+        ),
+      }))
+    }
+  },
+
+  ajouterNotification: async (n) => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        type: n.type,
+        titre: n.titre,
+        message: n.message,
+        lien_id: n.lienId,
+        lien_type: n.lienType,
+        destinataire_id: n.destinataireId,
+        lue: n.lue ?? false,
+        traitee: n.traitee ?? false,
+        date_echeance: n.dateEcheance,
+      })
+      .select()
+      .single()
+    if (!error && data) {
+      set(s => ({ notifications: [mapRow(data), ...s.notifications] }))
+    }
+  },
+
+  supprimerNotification: async (id) => {
+    const { error } = await supabase.from('notifications').delete().eq('id', id)
+    if (!error) set(s => ({ notifications: s.notifications.filter(n => n.id !== id) }))
+  },
 
   getNonLues: (destinataireId) =>
-    get().notifications.filter(
-      (n) => n.destinataireId === destinataireId && !n.lue
-    ),
+    get().notifications.filter(n => n.destinataireId === destinataireId && !n.lue),
 
   getParDestinataire: (destinataireId) =>
-    get().notifications.filter(
-      (n) => n.destinataireId === destinataireId
-    ),
+    get().notifications.filter(n => n.destinataireId === destinataireId),
 }))
