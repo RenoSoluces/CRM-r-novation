@@ -1,40 +1,48 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  TrendingUp, Target, Users, Percent,
-  Phone, Mail, FileText, Trophy, ArrowRight, Star, Building2, Wallet,
+  Calendar, FileText, ChevronRight, Plus, FolderOpen,
+  Wallet, Clock, TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOpportunitesStore } from '@/store/opportunitesStore'
 import { useContactsStore } from '@/store/contactsStore'
-import { useProduitsStore } from '@/store/produitsStore'
-import { ETAPES_PIPELINE } from '@/types/opportunite'
-import { formatEuro, formatRelative, truncate } from '@/utils/formatters'
-import Badge, { FAMILLE_COLORS, FAMILLE_LABELS } from '@/components/ui/Badge'
-import { Doughnut } from 'react-chartjs-2'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+import { formatEuro } from '@/utils/formatters'
 import clsx from 'clsx'
 
-ChartJS.register(ArcElement, Tooltip, Legend)
+// ── Objectif mensuel fixe (€) — ajustez ici si besoin ──
+const OBJECTIF_MENSUEL_EUR = 5000
 
-const ETAPES_DASHBOARD = [
-  'nouveau_lead', 'qualification', 'devis_envoye', 'dossier_mpr_cee', 'signe',
-] as const
+type FiltreTaches = 'tout' | 'dossiers' | 'rdv'
 
-const ACTIVITE_ICONS: Record<string, React.ReactNode> = {
-  appel: <Phone size={11} />, email: <Mail size={11} />, rdv: <Target size={11} />,
-  devis: <FileText size={11} />, signature: <Trophy size={11} />,
-  installation: <Star size={11} />, note: <FileText size={11} />,
+function isActive(o: any) {
+  const etapeFinale   = ['pose_livree', 'sav_suivi', 'perdu'].includes(o.etape)
+  const commSoc       = o.commission?.montantSociete ?? 0
+  const commPayee     = o.commissionPayee ?? 0
+  const commEnAttente = commSoc > 0 && commPayee < commSoc
+  return !etapeFinale || commEnAttente
 }
 
-const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316']
+function formatDateLongFr(date: Date) {
+  const str = date.toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
 
 export default function Dashboard() {
   const { user, can } = useAuth()
-  const navigate      = useNavigate()
-  const { opportunites } = useOpportunitesStore()
-  const { contacts }     = useContactsStore()
-  const { produits }     = useProduitsStore()
+  const navigate = useNavigate()
+  const { opportunites, fetchOpportunites } = useOpportunitesStore()
+  const { contacts, fetchContacts }         = useContactsStore()
+
+  const [filtreTaches, setFiltreTaches] = useState<FiltreTaches>('tout')
+
+  // ── FIX : récupère les données au montage ──
+  useEffect(() => {
+    fetchOpportunites()
+    fetchContacts()
+  }, [])
 
   const myOpps = useMemo(() => {
     if (can('opportunites.view_all')) return opportunites
@@ -42,298 +50,271 @@ export default function Dashboard() {
     return opportunites.filter(o => o.commercialId === user?.id)
   }, [opportunites, user, can])
 
-  const myContacts = useMemo(() => {
-    if (can('contacts.view_all'))   return contacts
-    if (user?.role === 'apporteur') return contacts.filter(c => c.apporteurId === user.id)
-    return contacts.filter(c => c.commercialId === user?.id)
-  }, [contacts, user, can])
-
-  /* ── KPIs communs ── */
-  const commissionEnCours = myOpps
-    .filter(o => o.etape !== 'perdu')
-    .reduce((sum, o) => {
-      const due  = o.commission?.montantCommercial ?? 0
-      const paid = o.commissionPayee ?? 0
-      return sum + Math.max(0, due - paid)
-    }, 0)
-
-  const oppsActives    = myOpps.filter(o => !['perdu', 'pose_livree', 'sav_suivi'].includes(o.etape))
-  const valeurPipeline = oppsActives.reduce((sum, o) => sum + (o.montantDevis ?? 0), 0)
+  function getMaCommission(o: typeof myOpps[0]) {
+    if (user?.role === 'apporteur') return o.commission?.montantApporteur ?? 0
+    if (can('opportunites.view_all')) return o.commission?.montantSociete ?? 0
+    return o.commission?.montantCommercial ?? 0
+  }
 
   const now = new Date()
-  const nouveauxLeads = myContacts.filter(c => {
-    const diff = now.getTime() - new Date(c.createdAt).getTime()
-    return diff < 7 * 24 * 60 * 60 * 1000
-  })
+  const moisActuel    = now.getMonth()
+  const anneeActuelle = now.getFullYear()
 
-  const gagnes      = myOpps.filter(o => ['signe', 'pose_livree'].includes(o.etape)).length
-  const totalFermes = myOpps.filter(o => !['nouveau_lead', 'qualification'].includes(o.etape)).length
-  const tauxConversion = totalFermes > 0 ? Math.round((gagnes / totalFermes) * 100) : 0
+  const commissionCeMois = myOpps
+    .filter(o => {
+      if (!o.dateSignature) return false
+      const d = new Date(o.dateSignature)
+      return d.getMonth() === moisActuel && d.getFullYear() === anneeActuelle
+    })
+    .reduce((s, o) => s + getMaCommission(o), 0)
 
-  /* ── KPIs admin société ── */
-  const commSocieteEnCours = opportunites
+  const commissionEnAttente = myOpps
     .filter(o => o.etape !== 'perdu')
-    .reduce((sum, o) => sum + Math.max(0, (o.commission?.montantSociete ?? 0)), 0)
-
-  const commSocieteTotale = opportunites
-    .reduce((sum, o) => sum + (o.commission?.montantSociete ?? 0), 0)
-
-  const commCommerciauxDues = opportunites
-    .filter(o => o.etape !== 'perdu')
-    .reduce((sum, o) => {
+    .reduce((s, o) => {
       const due  = o.commission?.montantCommercial ?? 0
       const paid = o.commissionPayee ?? 0
-      return sum + Math.max(0, due - paid)
+      return s + Math.max(0, due - paid)
     }, 0)
 
-  const commApporteursDues = opportunites
-    .filter(o => o.etape !== 'perdu')
-    .reduce((sum, o) => sum + Math.max(0, (o.commission?.montantApporteur ?? 0)), 0)
+  const pctObjectif = Math.min(100, Math.round((commissionCeMois / OBJECTIF_MENSUEL_EUR) * 100))
 
-  /* ── Pipeline kanban ── */
-  const colonnes = ETAPES_DASHBOARD.map(etapeId => {
-    const info  = ETAPES_PIPELINE.find(e => e.id === etapeId)!
-    const items = myOpps.filter(o => o.etape === etapeId)
-    return { ...info, items }
+  const oppsActives = myOpps.filter(isActive)
+  const dossiersAFinaliser = oppsActives.filter(
+    o => !['signe', 'pose_livree', 'sav_suivi'].includes(o.etape)
+  )
+
+  const tachesDossiers = dossiersAFinaliser
+  const tachesRdv = myOpps.filter(o => {
+    if (!o.dateRdv) return false
+    return new Date(o.dateRdv).toDateString() === now.toDateString()
   })
 
-  /* ── Activités récentes ── */
-  const recentActivites = useMemo(() => {
-    const all: {
-      activite: (typeof myOpps[0]['activites'][0])
-      opp: typeof myOpps[0]
-      contact: typeof contacts[0] | undefined
-    }[] = []
-    myOpps.forEach(opp => {
-      const contact = contacts.find(c => c.id === opp.contactId)
-      ;(opp.activites ?? []).forEach(a => all.push({ activite: a, opp, contact }))
-    })
-    return all
-      .sort((a, b) => new Date(b.activite.date).getTime() - new Date(a.activite.date).getTime())
-      .slice(0, 6)
-  }, [myOpps, contacts])
+  const tachesAffichees =
+    filtreTaches === 'dossiers' ? tachesDossiers.map(o => ({ ...o, __type: 'dossier' as const })) :
+    filtreTaches === 'rdv'      ? tachesRdv.map(o => ({ ...o, __type: 'rdv' as const })) :
+    [
+      ...tachesDossiers.map(o => ({ ...o, __type: 'dossier' as const })),
+      ...tachesRdv.map(o => ({ ...o, __type: 'rdv' as const })),
+    ]
 
-  /* ── Top produits ── */
-  const topProduits = useMemo(() => {
-    const counts: Record<string, number> = {}
-    myOpps.forEach(o => {
-      if (o.produitId) counts[o.produitId] = (counts[o.produitId] ?? 0) + 1
-    })
-    const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([produitId, count]) => ({
-        produit: produits.find(p => p.id === produitId),
-        count,
-        pct: Math.round((count / total) * 100),
-      }))
-      .filter(x => x.produit)
-  }, [myOpps, produits])
+  const totalTaches = tachesDossiers.length + tachesRdv.length
 
-  const pieData = {
-    labels: topProduits.map(({ produit }) => truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 20)),
-    datasets: [{
-      data: topProduits.map(({ pct }) => pct),
-      backgroundColor: PIE_COLORS.slice(0, topProduits.length),
-      borderWidth: 2, borderColor: '#ffffff',
-    }],
+  const oppsDuMois = myOpps.filter(o => {
+    const d = new Date(o.dateCreation)
+    return d.getMonth() === moisActuel && d.getFullYear() === anneeActuelle
+  })
+  const pipelineBrouillon = oppsDuMois.filter(o =>
+    ['nouveau_lead', 'qualification', 'rdv_planifie', 'rdv_effectue', 'devis_envoye'].includes(o.etape)
+  ).length
+  const pipelineSigne  = oppsDuMois.filter(o => o.etape === 'signe').length
+  const pipelineDepose = oppsDuMois.filter(o => o.etape === 'dossier_mpr_cee').length
+  const pipelinePaye   = oppsDuMois.filter(o => ['pose_livree', 'sav_suivi'].includes(o.etape)).length
+
+  function getContact(contactId: string) {
+    return contacts.find(c => c.id === contactId)
   }
 
   return (
     <div className="space-y-5">
 
-      {/* ── KPIs admin société — visibles uniquement par l'admin ── */}
-      {can('opportunites.view_all') && (
-        <div className="grid grid-cols-4 gap-4">
-          <KpiCard
-            label="Comm. société en cours"
-            value={formatEuro(commSocieteEnCours)}
-            sub="Non encore perçue"
-            icon={<Building2 size={20} />}
-            color="purple"
-          />
-          <KpiCard
-            label="Comm. société totale"
-            value={formatEuro(commSocieteTotale)}
-            sub="Depuis la création"
-            icon={<Wallet size={20} />}
-            color="green"
-          />
-          <KpiCard
-            label="Comm. commerciaux dues"
-            value={formatEuro(commCommerciauxDues)}
-            sub="Reste à payer"
-            icon={<TrendingUp size={20} />}
-            color="orange"
-          />
-          <KpiCard
-            label="Comm. apporteurs dues"
-            value={formatEuro(commApporteursDues)}
-            sub="Reste à payer"
-            icon={<Users size={20} />}
-            color="blue"
-          />
+      {/* En-tête */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-bold text-surface-500 uppercase tracking-wider">
+            Bonjour {user?.prenom} 👋
+          </p>
+          <h1 className="font-display font-bold text-2xl text-surface-900 mt-0.5">
+            {formatDateLongFr(now)}
+          </h1>
+          <p className="text-sm text-surface-500 mt-1">
+            Tu as <strong className="text-surface-700">{totalTaches}</strong> action{totalTaches > 1 ? 's' : ''} à traiter
+            et <strong className="text-surface-700">{tachesRdv.length}</strong> rendez-vous aujourd'hui.
+          </p>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/agenda')}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-surface-200 bg-white text-surface-700 text-xs font-semibold hover:bg-surface-50 transition-colors"
+          >
+            <Calendar size={14} /> Créer RDV
+          </button>
+          {can('opportunites.create') && (
+            <button
+              onClick={() => navigate('/contacts')}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Plus size={14} /> Nouveau dossier
+            </button>
+          )}
+        </div>
+      </div>
 
-      {/* ── KPIs commerciaux ── */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
-          label="Commission en cours"
-          value={formatEuro(commissionEnCours)}
-          sub="Commissions non encore payées"
-          icon={<TrendingUp size={20} />}
+          label="Commission ce mois"
+          value={formatEuro(commissionCeMois)}
+          sub={commissionEnAttente === 0 ? 'Aucun versement en attente' : `${formatEuro(commissionEnAttente)} en attente de versement`}
+          icon={<Wallet size={18} />}
           color="green"
         />
         <KpiCard
-          label="Opportunités actives"
-          value={String(oppsActives.length)}
-          sub={`Valeur pipeline : ${formatEuro(valeurPipeline)}`}
-          icon={<Target size={20} />}
+          label="En attente"
+          value={formatEuro(commissionEnAttente)}
+          sub={commissionEnAttente === 0 ? 'Rien à régler' : 'À régulariser'}
+          icon={<Clock size={18} />}
           color="orange"
         />
         <KpiCard
-          label="Nouveaux leads"
-          value={String(nouveauxLeads.length)}
-          trend={`+${nouveauxLeads.length} cette semaine`}
-          trendUp
-          icon={<Users size={20} />}
+          label="Objectif mensuel"
+          value={`${pctObjectif}%`}
+          progress={pctObjectif}
+          sub={`${formatEuro(commissionCeMois)} / ${formatEuro(OBJECTIF_MENSUEL_EUR)}`}
+          icon={<TrendingUp size={18} />}
           color="blue"
         />
         <KpiCard
-          label="Taux conversion"
-          value={`${tauxConversion}%`}
-          trend="-2% vs objectif"
-          trendUp={false}
-          icon={<Percent size={20} />}
-          color="red"
+          label="Dossiers actifs"
+          value={String(oppsActives.length)}
+          sub={`${dossiersAFinaliser.length} à finaliser`}
+          icon={<FolderOpen size={18} />}
+          color="surface"
         />
       </div>
 
-      {/* ── Pipeline + Sidebar ── */}
-      <div className="grid grid-cols-[1fr_300px] gap-5">
+      {/* Tâches + Agenda/Pipeline */}
+      <div className="grid grid-cols-[1fr_360px] gap-5">
 
-        {/* Pipeline Kanban */}
+        {/* À faire aujourd'hui */}
         <div className="bg-white rounded-xl border border-surface-200 shadow-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-semibold text-surface-800">Pipeline commercial</h2>
-            <button onClick={() => navigate('/opportunites')}
-              className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1 font-medium">
-              Voir tout <ArrowRight size={12} />
-            </button>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h2 className="font-display font-semibold text-surface-800">
+                À faire aujourd'hui
+              </h2>
+              <p className="text-xs text-surface-400 mt-0.5">Tes prochaines actions, par priorité</p>
+            </div>
+            <div className="flex rounded-lg border border-surface-200 overflow-hidden">
+              {([
+                { key: 'tout',     label: 'Tout',     count: totalTaches },
+                { key: 'dossiers', label: 'Dossiers', count: tachesDossiers.length },
+                { key: 'rdv',      label: 'RDV',      count: tachesRdv.length },
+              ] as const).map(f => (
+                <button key={f.key} onClick={() => setFiltreTaches(f.key)}
+                  className={clsx('px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors',
+                    filtreTaches === f.key ? 'bg-surface-900 text-white' : 'text-surface-600 hover:bg-surface-50')}>
+                  {f.label}
+                  <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                    filtreTaches === f.key ? 'bg-white/20 text-white' : 'bg-surface-100 text-surface-500')}>
+                    {f.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {colonnes.map(col => (
-              <div key={col.id} className="min-w-[155px] flex-1">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-surface-500">
-                    {col.label.replace(' ✓', '')}
-                  </span>
-                  <span className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center"
-                    style={{ background: col.couleur + '22', color: col.couleur }}>
-                    {col.items.length}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {col.items.slice(0, 3).map(opp => {
-                    const contact = contacts.find(c => c.id === opp.contactId)
-                    const produit = produits.find(p => p.id === opp.produitId)
-                    return (
-                      <button key={opp.id} onClick={() => navigate(`/opportunites/${opp.id}`)}
-                        className="w-full text-left p-2.5 bg-surface-50 hover:bg-surface-100 rounded-lg border border-surface-200 hover:border-surface-300 transition-all hover:shadow-sm">
-                        <p className="text-xs font-semibold text-surface-800 leading-tight truncate">
-                          {contact ? `${contact.civilite ?? ''} ${contact.nom}`.trim() : opp.reference}
-                        </p>
-                        {opp.montantDevis && (
-                          <p className="text-xs text-surface-600 mt-0.5">{formatEuro(opp.montantDevis)}</p>
-                        )}
-                        {contact && (
-                          <p className="text-[10px] text-surface-400 truncate">{contact.prenom} {contact.nom}</p>
-                        )}
-                        {produit && (
-                          <div className="mt-1.5">
-                            <Badge
-                              label={truncate(FAMILLE_LABELS[produit.famille] ?? produit.nom, 16)}
-                              color={FAMILLE_COLORS[produit.famille]}
-                            />
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
-                  {col.items.length > 3 && (
-                    <p className="text-[10px] text-surface-400 text-center py-1">+{col.items.length - 3} autres</p>
-                  )}
-                  {col.items.length === 0 && (
-                    <div className="h-16 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center">
-                      <span className="text-[10px] text-surface-300">Vide</span>
+
+          {totalTaches > 0 && (
+            <p className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-2">
+              Prioritaire
+            </p>
+          )}
+
+          <div className="space-y-2">
+            {tachesAffichees.length === 0 ? (
+              <p className="text-xs text-surface-400 text-center py-10">Aucune action en attente 🎉</p>
+            ) : tachesAffichees.map((opp: any) => {
+              const contact = getContact(opp.contactId)
+              const isRdv = opp.__type === 'rdv'
+              return (
+                <button key={`${opp.__type}-${opp.id}`}
+                  onClick={() => navigate(`/opportunites/${opp.id}`)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-surface-100 hover:border-surface-200 hover:bg-surface-50 transition-colors text-left"
+                >
+                  <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                    isRdv ? 'bg-brand-100 text-brand-600' : 'bg-orange-100 text-orange-500')}>
+                    {isRdv ? <Calendar size={15} /> : <FileText size={15} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-surface-800 truncate">
+                        {isRdv ? 'Rendez-vous aujourd\'hui' : 'Finaliser et transmettre le dossier'}
+                      </p>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-orange-100 text-orange-600 flex-shrink-0">
+                        À FAIRE
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                    <p className="text-xs text-surface-500 mt-0.5 truncate">
+                      {contact ? `${contact.prenom} ${contact.nom}`.toUpperCase() : opp.reference}
+                      {' · '}#{opp.reference}
+                      {contact?.adresse?.ville && ` · ${contact.adresse.ville} ${contact.adresse.codePostal ?? ''}`}
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-surface-300 flex-shrink-0" />
+                </button>
+              )
+            })}
           </div>
         </div>
 
         {/* Colonne droite */}
         <div className="space-y-4">
 
-          {/* Activités récentes */}
+          {/* Agenda du jour */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Activités récentes</h3>
-            <div className="space-y-1">
-              {recentActivites.length === 0 ? (
-                <p className="text-xs text-surface-400 text-center py-6">Aucune activité</p>
-              ) : recentActivites.map(({ activite, opp, contact }) => (
-                <button key={activite.id} onClick={() => navigate(`/opportunites/${opp.id}`)}
-                  className="w-full flex items-start gap-2.5 text-left hover:bg-surface-50 rounded-lg p-1.5 -mx-1.5 transition-colors">
-                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {ACTIVITE_ICONS[activite.type] ?? <FileText size={11} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-surface-700 truncate">{activite.titre}</p>
-                    {contact && (
-                      <p className="text-[10px] text-surface-400 truncate">{contact.prenom} {contact.nom}</p>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-surface-400 flex-shrink-0">{formatRelative(activite.date)}</span>
-                </button>
-              ))}
-            </div>
+            <h3 className="font-display font-semibold text-surface-800 text-sm flex items-center gap-2">
+              <Calendar size={15} className="text-brand-600" /> Agenda du jour
+            </h3>
+            <p className="text-xs text-surface-400 mt-0.5 mb-3">
+              {tachesRdv.length === 0 ? 'Aucun rendez-vous' : `${tachesRdv.length} rendez-vous`}
+            </p>
+
+            {tachesRdv.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 py-8 flex flex-col items-center justify-center text-center mb-3">
+                <Calendar size={20} className="text-surface-300 mb-2" />
+                <p className="text-xs text-surface-400">Aucun rendez-vous programmé.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-3">
+                {tachesRdv.map(opp => {
+                  const contact = getContact(opp.contactId)
+                  const heure = opp.dateRdv
+                    ? new Date(opp.dateRdv).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                    : ''
+                  return (
+                    <button key={opp.id} onClick={() => navigate(`/opportunites/${opp.id}`)}
+                      className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-surface-50 hover:bg-surface-100 transition-colors text-left">
+                      <p className="text-xs font-semibold text-surface-800 truncate">
+                        {contact ? `${contact.prenom} ${contact.nom}` : opp.reference}
+                      </p>
+                      <span className="text-xs font-bold text-brand-600 flex-shrink-0">{heure}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <button onClick={() => navigate('/agenda')}
+              className="w-full py-2 rounded-lg border border-dashed border-surface-200 text-xs font-semibold text-surface-500 hover:bg-surface-50 transition-colors flex items-center justify-center gap-1.5">
+              <Plus size={12} /> Planifier un rendez-vous
+            </button>
           </div>
 
-          {/* Top produits camembert */}
+          {/* Pipeline du mois */}
           <div className="bg-white rounded-xl border border-surface-200 shadow-card p-4">
-            <h3 className="font-display font-semibold text-surface-800 text-sm mb-3">Top produits</h3>
-            {topProduits.length === 0 ? (
-              <p className="text-xs text-surface-400 text-center py-2">Aucune donnée</p>
-            ) : (
-              <>
-                <div className="space-y-1 mb-3">
-                  {topProduits.map(({ produit, pct }, i) => (
-                    <div key={produit!.id} className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PIE_COLORS[i] }} />
-                        <span className="text-xs text-surface-700 truncate">
-                          {truncate(FAMILLE_LABELS[produit!.famille] ?? produit!.nom, 18)}
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold text-surface-700 flex-shrink-0">{pct}%</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="h-[160px] flex items-center justify-center">
-                  <Doughnut data={pieData} options={{
-                    responsive: true, maintainAspectRatio: false, cutout: '55%',
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: { callbacks: { label: ctx => ` ${ctx.label} : ${ctx.parsed}%` } },
-                    },
-                  }} />
-                </div>
-              </>
-            )}
+            <h3 className="font-display font-semibold text-surface-800 text-sm">Pipeline du mois</h3>
+            <p className="text-xs text-surface-400 mt-0.5 mb-3">Répartition par étape</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <PipelineStat label="Brouillon" value={pipelineBrouillon} bg="bg-surface-100" text="text-surface-700" />
+              <PipelineStat label="Signé"     value={pipelineSigne}     bg="bg-green-100"   text="text-green-700" />
+              <PipelineStat label="Déposé"    value={pipelineDepose}    bg="bg-amber-100"   text="text-amber-700" />
+              <PipelineStat label="Payé"      value={pipelinePaye}      bg="bg-surface-100" text="text-surface-600" />
+            </div>
+
+            <button onClick={() => navigate('/opportunites')}
+              className="w-full mt-3 text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center justify-center gap-1">
+              Voir le pipeline complet <ChevronRight size={12} />
+            </button>
           </div>
 
         </div>
@@ -342,37 +323,47 @@ export default function Dashboard() {
   )
 }
 
-/* ── KPI Card ── */
 function KpiCard({
-  label, value, sub, trend, trendUp, icon, color,
+  label, value, sub, icon, color, progress,
 }: {
-  label: string; value: string; sub?: string; trend?: string
-  trendUp?: boolean; icon: React.ReactNode
-  color: 'green' | 'orange' | 'blue' | 'red' | 'purple'
+  label: string
+  value: string
+  sub?: string
+  icon: React.ReactNode
+  color: 'green' | 'orange' | 'blue' | 'surface'
+  progress?: number
 }) {
   const palette = {
-    green:  { bg: 'bg-green-50',  icon: 'text-green-600',  border: 'border-green-100' },
-    orange: { bg: 'bg-orange-50', icon: 'text-orange-500', border: 'border-orange-100' },
-    blue:   { bg: 'bg-blue-50',   icon: 'text-blue-600',   border: 'border-blue-100' },
-    red:    { bg: 'bg-red-50',    icon: 'text-red-500',    border: 'border-red-100' },
-    purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-100' },
+    green:   { bg: 'bg-green-50',  icon: 'bg-white text-green-600',         border: 'border-green-100' },
+    orange:  { bg: 'bg-orange-50', icon: 'bg-white text-orange-500',        border: 'border-orange-100' },
+    blue:    { bg: 'bg-blue-50',   icon: 'bg-white text-blue-600',          border: 'border-blue-100' },
+    surface: { bg: 'bg-white',     icon: 'bg-surface-100 text-surface-600', border: 'border-surface-200' },
   }[color]
 
   return (
-    <div className={clsx('bg-white rounded-xl border shadow-card p-5', palette.border)}>
+    <div className={clsx('rounded-xl border shadow-card p-5', palette.bg, palette.border)}>
       <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-surface-500 uppercase tracking-wide">{label}</p>
-        <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', palette.bg, palette.icon)}>
+        <p className="text-xs font-bold text-surface-500 uppercase tracking-wide">{label}</p>
+        <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', palette.icon)}>
           {icon}
         </div>
       </div>
       <p className="font-display font-bold text-2xl text-surface-900">{value}</p>
-      {sub && <p className="text-xs text-surface-500 mt-1">{sub}</p>}
-      {trend && (
-        <p className={clsx('text-xs mt-1.5 font-medium flex items-center gap-1', trendUp ? 'text-green-600' : 'text-red-500')}>
-          {trendUp ? '▲' : '▼'} {trend}
-        </p>
+      {progress !== undefined && (
+        <div className="h-1.5 bg-white/70 rounded-full overflow-hidden mt-3 mb-1.5">
+          <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
       )}
+      {sub && <p className="text-xs text-surface-500 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+function PipelineStat({ label, value, bg, text }: { label: string; value: number; bg: string; text: string }) {
+  return (
+    <div className={clsx('rounded-xl p-3 text-center', bg)}>
+      <p className={clsx('font-display font-bold text-xl', text)}>{value}</p>
+      <p className="text-[10px] text-surface-500 uppercase tracking-wide mt-0.5">{label}</p>
     </div>
   )
 }
