@@ -17,6 +17,7 @@ export interface Notification {
   lienType?: 'opportunite' | 'contact'
   destinataireId: string
   lue: boolean
+  traitee: boolean
   dateEcheance?: string
   createdAt: string
 }
